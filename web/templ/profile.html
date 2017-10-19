@@ -1,0 +1,26 @@
+<html>
+    <head>
+    <title>点击复制</title>
+    <style>
+        input{
+            font-size : 16px ;
+            font-family : "微软雅黑" ;
+                }
+    </style>
+    </head>
+    <body>
+    <script type="text/JavaScript">
+    function copytitle()
+    {
+    var Url2=document.getElementById("profile");
+    Url2.select(); // 选择对象
+    document.execCommand("Copy"); // 执行浏览器复制命令
+    }
+    </script>
+    <p>profile_id:{{profile_id}}</p>
+    <p>profile_name:{{profile_name}}</p>
+    <input type="button" onClick="copytitle()" value="点击复制" />路径
+    <textarea id="profile">{{profile_path}}</textarea>
+    </body>
+</html>
+    

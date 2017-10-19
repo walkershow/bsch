@@ -1,0 +1,1 @@
+python d:\script\wssc.py -l d:\script\wssc.log.conf -g 4 -s 1 -c "notepad"
