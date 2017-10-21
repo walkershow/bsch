@@ -37,12 +37,7 @@ class TaskAllot(object):
         self.want_init = want_init
         self.server_id = server_id
         self.groupids_dict = {}
-        if self.want_init == 1:
-            # logger.info("want to init...")
-            #print "reset"
-            TaskGroup.reset_rantimes_alltask(db)
-            TaskGroup.impl_task_templ(db)
-            TaskGroup.impl_task_templ_detail(db)
+
 
 
     def log_task_id(self,id, task_id):
@@ -54,16 +49,16 @@ class TaskAllot(object):
     def reset_when_newday(self):
         '''新的一天重置所有运行次数'''
         today = datetime.date.today() 
-        if self.cur_date != today:
+        if today != self.cur_date:
             self.cur_date = today
             #统一到一个w = 1的进程进行更新
             if self.want_init == 1:
                 print "start new day to reinit..."
-                # logger.info("start new day to reinit...")
+                #logger.info("start new day to reinit...")
                 TaskGroup.reset_rantimes_today(self.db)
                 TaskGroup.reset_rantimes_allot_impl(self.db)
                 print "end new day to reinit..."
-                # logger.info("end new day to reinit...")
+                #logger.info("end new day to reinit...")
 
     def get_running_groupids(self):
         '''获取运行状态的任务组
@@ -210,17 +205,29 @@ class TaskAllot(object):
 
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm2"
+    dbutil.db_name = "vm"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    t=TaskAllot(0, 1, dbutil)
-    while True:
-        t.allot_by_priority("d:\\10.bat")
-        # t.allot_by_rand("d:\\10.bat")
-        time.sleep(1)
-    # t2=TaskAllot(0,1, dbutil)
-    # TaskGroup.reset_rantimes_allot_impl(dbutil)
+    #t=TaskAllot(0, 1, dbutil)
+    task_group_id = None
+    print len(sys.argv)
+    if len(sys.argv)>1:
+        task_group_id = int(sys.argv[1])
+        print task_group_id
+        TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
     # while True:
-    #     t.reset_when_newday()
-    #     time.sleep(10)
+    #     t.allot_by_priority("d:\\10.bat")
+    #     # t.allot_by_rand("d:\\10.bat")
+    #     time.sleep(1)
+    TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
+    t=TaskAllot(1,1, dbutil)
+    if task_group_id :
+        exit(0)
+    while True:
+        try:
+            t.reset_when_newday()
+            time.sleep(10)
+        except:
+            time.sleep(5)
+            continue

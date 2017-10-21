@@ -48,6 +48,7 @@ g_last_shutdown_time = None
 g_start_idx = 0
 vm_names = []
 vm_ids = []
+g_reset_waittime = 120
 
 #标识是否是进入暂停状态 0:否 1:是
 
@@ -228,7 +229,7 @@ def main_loop():
                 sqltmp = sql %(g_serverid, vm_ids[i])
                 print sqltmp
                 res = dbutil.select_sql(sqltmp)
-                if not res:
+                if not res :
                     print res
                     g_dsp_tmp = g_dsp
                     g_dsp_tmp = g_dsp_tmp % (vm_names[i])
@@ -320,15 +321,22 @@ def init():
         dest="winit",
         default="0",
         help="init taskgroup,default is false")
+    parser.add_option(
+        "-k",
+        "--reset_waittime",
+        dest="rwt",
+        default="120",
+        help="reset waiting time,default is 120s")
     (options, args) = parser.parse_args()
     global g_current_dir, g_reset, g_cur_running_count
-    global g_serverid, g_rto, g_dsp 
+    global g_serverid, g_rto, g_dsp,g_reset_waittime 
     g_cur_running_count = 0
     g_dsp = options.dsp
     g_serverid = int(options.serverid)
     if g_serverid == 0:
         print "serverid is 0,exit"
         sys.exit(1)
+    g_reset_waittime = int(options.rwt)
     #print options.winit
     g_want_init_task = int(options.winit)
     #print "g_want_init_task", g_want_init_task

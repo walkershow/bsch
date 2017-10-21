@@ -97,7 +97,20 @@ class LogTask(object):
         if ret<0:
             LogTask.logger.info("sql:%s ret:%d", sql, ret)
             raise LogTaskError, "task done error sql:%s ret:%d"%(sql, ret)
-        params = {'end_time':'CURRENT_TIMESTAMP'}
+        params = {'status':2,'end_time':'CURRENT_TIMESTAMP'}
+        self.log_task_timepoint(oprcode, params )
+
+    def task_done2(self, oprcode):
+        if oprcode is None:
+            LogTask.logger.info("oprcode is none ,can't log task_done:%d,%d", server_id, group_id)
+            return
+        sql = '''update vm_oprcode set status=2,update_time=CURRENT_TIMESTAMP where oprcode=%d'''%(oprcode)
+        LogTask.logger.info(sql)
+        ret = LogTask.db.execute_sql(sql)
+        if ret<0:
+            LogTask.logger.info("sql:%s ret:%d", sql, ret)
+            raise LogTaskError, "task done error sql:%s ret:%d"%(sql, ret)
+        params = {'status':2,'end_time':'CURRENT_TIMESTAMP'}
         self.log_task_timepoint(oprcode, params )
 
     def log_task_timepoint(self, oprcode, params):

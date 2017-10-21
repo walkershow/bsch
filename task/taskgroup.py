@@ -96,12 +96,20 @@ class TaskGroup(object):
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
 
     @staticmethod
-    def impl_task_templ(db):
-        sql_trunc =" truncate table vm_task_allot_impl_tmp"
-        ret = db.execute_sql(sql_trunc)
-        if ret<0:
-            raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
-        sql = "select id,sum(times) as total,templ_id from vm_task_group where id>0 group by id order by id"
+    def impl_task_templ(db, task_group_id=None):
+        sql = ""
+        if not task_group_id: 
+            sql_trunc =" truncate table vm_task_allot_impl_tmp"
+            ret = db.execute_sql(sql_trunc)
+            if ret<0:
+                raise TaskGroupError,"%s excute error;ret:%d"%(sql_trunc, ret)
+            sql = "select id,sum(times) as total,templ_id from vm_task_group where id>0 group by id order by id"
+        else:
+            sql_del = "delete from vm_task_allot_impl_tmp where id=%d"%(task_group_id)
+            ret = db.execute_sql(sql_del)
+            if ret<0:
+                raise TaskGroupError,"%s excute error;ret:%d"%(sql_del, ret)
+            sql = "select id,sum(times) as total,templ_id from vm_task_group where id=%d group by id order by id"%(task_group_id)
         sql_templ = "select percent,time_to_sec(start_time),time_to_sec(end_time),id,sub_id,detail_id from vm_task_allot_templ where id=%d order by sub_id"
         sql_alltask = "select task_id, times from vm_task_group  where id=%d "
         #sql_alltask = "select task_id, times from vm_task_group a,vm_task b where id=%d and a.task_id=b.id and b.status=1"
@@ -112,54 +120,63 @@ class TaskGroup(object):
             total = r[1]
             templ_id = r[2]
             sql = sql_alltask%(id)
-            print "all_task:",sql
+            # print "all_task:",sql
             res_alltask = db.select_sql(sql)
             task_dict = {}
             for t in res_alltask:
                 task_dict[t[0]] = t[1]
-            print "task_dict:",task_dict
+            # print "task_dict:",task_dict
             sql = sql_templ%(templ_id)
-            print "templ:",sql
+            # print "templ:",sql
             res = db.select_sql(sql)
             for r in res:
-                print "templ row:", r
+                # print "templ row:", r
                 p = r[0]
                 start_time = int(r[1])
                 end_time = int(r[2])
-                print "start_time,end_time",start_time,end_time
+                # print "start_time,end_time",start_time,end_time
                 templ_id = r[3]
                 templ_sub_id = r[4]
                 detail_id = r[5]
                 cur_allot_num = int(round(total * p/100))
-                print "cur_allot_num", cur_allot_num
+                # print "cur_allot_num", cur_allot_num
                 for i in range(cur_allot_num):
                     if task_dict:
                         task_id = choice(task_dict.keys())
-                        print "task_id:",task_id
+                        # print "task_id:",task_id
                         task_dict[task_id]= task_dict[task_id]- 1
-                        print task_dict
+                        # print task_dict
                         if task_dict[task_id] <=0:
                             task_dict.pop(task_id)
                         sql = '''insert into vm_task_allot_impl_tmp(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id,detail_id, update_time)
                             values(%d,%d,sec_to_time(%d),sec_to_time(%d),allot_times+1,%d, %d,%d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
                         sql_impl = sql%(id,task_id,start_time,end_time, templ_id, templ_sub_id,detail_id)
-                        print sql_impl
+                        # print sql_impl
                         ret = db.execute_sql(sql_impl)
                         if ret<0:
                             raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
     
     @staticmethod
-    def impl_task_templ_detail(db):
-        sql_trunc =" truncate table vm_task_allot_impl"
-        ret = db.execute_sql(sql_trunc)
-        if ret<0:
-            raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
-        sql = '''select id,task_id,allot_times,templ_id,templ_sub_id,detail_id,time_to_sec(start_time),time_to_sec(end_time) from vm_task_allot_impl_tmp order by id,task_id'''
+    def impl_task_templ_detail(db, task_group_id=None):
+        sql = ""
+        if not task_group_id:
+            sql_trunc =" truncate table vm_task_allot_impl"
+            ret = db.execute_sql(sql_trunc)
+            if ret<0:
+                raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
+            sql = '''select id,task_id,allot_times,templ_id,templ_sub_id,detail_id,time_to_sec(start_time),time_to_sec(end_time) from vm_task_allot_impl_tmp order by id,task_id'''
+        else:
+            sql_del = "delete from vm_task_allot_impl where id=%d"%(task_group_id)
+            ret = db.execute_sql(sql_del)
+            if ret<0:
+                raise TaskGroupError,"%s excute error;ret:%d"%(sql_del, ret)
+            sql = '''select id,task_id,allot_times,templ_id,templ_sub_id,detail_id,time_to_sec(start_time),time_to_sec(end_time) 
+            from vm_task_allot_impl_tmp where id=%d order by id,task_id'''%(task_group_id)
         res = db.select_sql(sql)
         for r in res:
             id,task_id,allot_times,templ_id,templ_sub_id,detail_id,start_time,end_time = r
-            print r
-            print allot_times
+            # print r
+            # print allot_times
             sql = "select id,start_min,end_min from vm_task_allot_templ_detail where id=%d order by sub_id"%(detail_id)
             res = db.select_sql(sql)
             if not res:
@@ -176,14 +193,23 @@ class TaskGroup(object):
                         values(%d,%d,date_add(sec_to_time(%d), interval %d minute),date_add(sec_to_time(%d), interval %d minute),
                         allot_times+1,%d, %d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
                     sql_impl = sql%(id,task_id,start_time, start, start_time, end, templ_id, templ_sub_id)
-                    print sql_impl
+                    # print sql_impl
                     ret = db.execute_sql(sql_impl)
                     if ret<0:
                         raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
                     num = num +1
                     if num>allot_times:
                         break
+    @staticmethod
+    def reset_rantimes_by_task_group_id(db, task_group_id):
+        '''更新当天任务'''
 
+        sql ="update vm_task_group set times=FLOOR(times_start_range + (RAND() * (times_end_range-times_start_range)))" \
+        "where templ_id>0 and id=%d"%(task_group_id) 
+        ret = db.execute_sql(sql)
+        if ret<0:
+            raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
+            
     @staticmethod
     def reset_rantimes_today(db):
         '''更新当天任务'''
@@ -205,9 +231,9 @@ class TaskGroup(object):
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
 
     @staticmethod
-    def reset_rantimes_allot_impl(db):
-        TaskGroup.impl_task_templ(db)
-        TaskGroup.impl_task_templ_detail(db)
+    def reset_rantimes_allot_impl(db, task_group_id=None):
+        TaskGroup.impl_task_templ(db, task_group_id)
+        TaskGroup.impl_task_templ_detail(db, task_group_id)
     
     def choose_vaild_task(self):
         self.__initValidTasks()

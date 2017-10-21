@@ -62,9 +62,9 @@ def autoargs():
     cur_cwd = os.getcwd()
     dirs = cur_cwd.split('\\')
     vmname = dirs[-2]
-    vm_id= vmname[1:]
-    server_id= dirs[-3]
-    logger.info("get groupid,serverid from cwd:%s,%s",groupid, serverid)
+    vm_id= int(vmname[1:])
+    server_id= int(dirs[-3])
+    logger.info("get vmid,serverid from cwd:%s,%s",vm_id, server_id)
 
 
 def init():
@@ -140,14 +140,16 @@ def is_task_running():
         return None
     return res[0][0]
 
-def get_task_id():
-    sql = "select cur_task_id from vm_cur_task where server_id=%d and vm_id=%d "%(int(server_id), int(vm_id))
+def get_running_task_id():
+    sql = "select cur_task_id,oprcode from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
     res = dbutil.select_sql(sql)
     if not res:
-        return None
-    return res[0][0]
+        return None,None
+    return res[0][0],res[0][1]
+
 def set_task_status(status):
-    ''' 1:running
+    ''' 0:nothing to do ,reday 
+        1:running
         2:done
         3:noinput
         4:timeout
@@ -215,7 +217,7 @@ def update_running_minutes():
 
 def make_groupid_file():
     f = open(r"d:\z.txt",'w')
-    f.write("http://192.168.1.21/vm/ad_stat?sid=%s&gid=%s"%(server_id,vm_id))
+    f.write("http://192.168.1.21/vm/ad_stat2?sid=%s&gid=%s"%(server_id,vm_id))
     f.close()
 
 def run_new_task():
@@ -236,10 +238,13 @@ def run_new_task():
         time.sleep(5)
 
 def task_done():
-    task_id = get_task_id()
+    task_id,oprcode = get_running_task_id()
+    if not task_id:
+        return
     logger.info("==========the task:%d is done==========",task_id)
     set_task_status(2)
-    g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
+    g_logtask.task_done(oprcode)
+    # g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
 
 def main():
     global last_rec_time,task_id

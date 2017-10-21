@@ -93,20 +93,20 @@ class TaskProfile(object):
     
     def set_cur_task_profile(self, vm_id, task_id, task_group_id):
         task_type, terminal_type = self.get_task_type(task_id) 
-        self.logger.info("get task type task_type:%d, terminal_type:%d",task_type, terminal_type)
+        self.logger.info("task id:%d get task type task_type:%d, terminal_type:%d",task_id, task_type, terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ
         profile_id = self.get_task_usable_profiles(vm_id, task_type, terminal_type)
         # print profile_id
         if not profile_id:
-            self.logger.info("no profile to use!!!")
+            self.logger.info("task id:%d no profile to use!!!", task_id)
             return False
-        self.logger.info("allot profile id:%d", profile_id)
+        self.logger.info("task id:%d will run allot profile id:%d", task_id, profile_id)
         self.log_task.gen_oprcode_bytask(self.server_id, vm_id, task_id)
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id, task_id)
 
-        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode)"\
-        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d) on duplicate key update cur_task_id=%d,cur_profile_id=%d,"\
-        "task_group_id=%d,status=%d, start_time=CURRENT_TIMESTAMP,oprcode=%d"%(
+        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes)"\
+        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0) on duplicate key update cur_task_id=%d,cur_profile_id=%d,"\
+        "task_group_id=%d,status=%d, start_time=CURRENT_TIMESTAMP,oprcode=%d,ran_minutes=0"%(
             self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode,
             task_id, profile_id, task_group_id, -1, oprcode  )
         ret = self.db.execute_sql(sql)
