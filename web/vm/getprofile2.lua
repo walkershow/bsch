@@ -22,7 +22,7 @@ end
 --     ngx.exit(ngx.HTTP_BAD_REQUEST)
 -- end
 
-local sql = string.format("select a.cur_profile_id,b.name,b.shortcut from vm_cur_task a,profiles b where a.server_id=%d and a.vm_id=%d and a.status=1", serverid, vmid)
+local sql = string.format("select a.cur_profile_id,b.name,b.shortcut from vm_cur_task a,profiles b where a.cur_profile_id=b.id and a.server_id=%d and a.vm_id=%d and a.status=1", serverid, vmid)
 ngx.log(ngx.INFO, sql)
 local  res, err, errno, sqlstate = db:query(sql, 10)
 if not res then

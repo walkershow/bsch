@@ -243,7 +243,7 @@ def task_done():
         return
     logger.info("==========the task:%d is done==========",task_id)
     set_task_status(2)
-    g_logtask.task_done(oprcode)
+    g_logtask.task_done2(oprcode)
     # g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
 
 def main():
