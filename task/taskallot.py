@@ -28,12 +28,11 @@ class TaskAllotError(Exception):
 class TaskAllot(object):
     '''任务分配'''
 
-    cur_date = None
+    #cur_date = None
 
     def __init__(self,want_init, server_id, db):
         self.db = db 
-        today = datetime.date.today() 
-        self.cur_date = today
+        self.cur_date = None
         self.want_init = want_init
         self.server_id = server_id
         self.groupids_dict = {}
@@ -48,15 +47,18 @@ class TaskAllot(object):
     
     def reset_when_newday(self):
         '''新的一天重置所有运行次数'''
-        today = datetime.date.today() 
+        today = datetime.date.today()
+        print today,self.cur_date
         if today != self.cur_date:
-            self.cur_date = today
+            
             #统一到一个w = 1的进程进行更新
             if self.want_init == 1:
                 print "start new day to reinit..."
                 #logger.info("start new day to reinit...")
                 TaskGroup.reset_rantimes_today(self.db)
                 TaskGroup.reset_rantimes_allot_impl(self.db)
+                self.cur_date = today
+                print "cur_date",self.cur_date
                 print "end new day to reinit..."
                 #logger.info("end new day to reinit...")
 
@@ -220,7 +222,7 @@ if __name__ == '__main__':
     #     t.allot_by_priority("d:\\10.bat")
     #     # t.allot_by_rand("d:\\10.bat")
     #     time.sleep(1)
-    TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
+        TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
     t=TaskAllot(1,1, dbutil)
     if task_group_id :
         exit(0)

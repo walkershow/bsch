@@ -39,7 +39,7 @@ class LogTask(object):
             raise LogTaskError, "gen oprcode error sql:%s ret:%d"%(sql, ret)
 
     def gen_oprcode_bytask(self, server_id, group_id, task_id):
-        self.log_cur_taskid(server_id, group_id, task_id)
+        # self.log_cur_taskid(server_id, group_id, task_id)
         sql = '''insert into vm_oprcode(server_id,group_id,task_id,status,create_time,update_time)
                 values(%d,%d,%d,1,CURRENT_TIMESTAMP,CURRENT_TIMESTAMP)'''%(
                     server_id,group_id,task_id
@@ -74,9 +74,9 @@ class LogTask(object):
         # raise LogTaskError, "no task_id return error sql:%s "%(sql)
     
     
-    def get_oprcode_latest(self, server_id, group_id):
-        task_id = self.get_cur_taskid(server_id, group_id)
-        sql_oprcode = "select oprcode from vm_oprcode where server_id=%d and group_id=%d and task_id=%d and status!=2 \
+    def get_oprcode_latest(self, server_id, group_id,task_id):
+        # task_id = self.get_cur_taskid(server_id, group_id)
+        sql_oprcode = "select oprcode from vm_oprcode where server_id=%d and group_id=%d and task_id=%d and status not in(2,3,4,5,6) \
          order by create_time desc limit 1"%(
             server_id,group_id,task_id
         )
@@ -86,8 +86,8 @@ class LogTask(object):
             return res[0][0]
         return None
      
-    def task_done(self, server_id, group_id):
-        oprcode = self.get_oprcode_latest(server_id, group_id) 
+    def task_done(self, server_id, group_id,task_id):
+        oprcode = self.get_oprcode_latest(server_id, group_id, task_id) 
         if oprcode is None:
             LogTask.logger.info("oprcode is none ,can't log task_done:%d,%d", server_id, group_id)
             return

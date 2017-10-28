@@ -32,6 +32,19 @@ def update_vm_status_endtime(id, status):
     if ret <0 :
         raise Exception,"update vm status failed:%s:%d"(sql,ret)
 
+def get_vms(server_id):
+    sql= "select id,vm_id,vm_name from vm_list where server_id=%d and enabled=0 "%(server_id)
+    logger.info("%s", sql)
+    res = dbutil.select_sqlwithdict(sql)
+    running_vmnames,running_vmids = [],[]
+    if res:
+        for row in res:
+            vm_id = row['vm_id']
+            vm_name = row['vm_name']
+            id = row["id"]
+            running_vmnames.append(vm_name)
+            running_vmids.append(vm_id)
+    return running_vmnames, running_vmids
 
 def start_vms(server_id, srange, erange):
     sql= "select id,vm_id,vm_name from vm_list where server_id=%d and enabled=0 and vm_id between %d and %d"%(server_id,srange, erange)

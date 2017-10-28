@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+
 '''
  @Author: coldplay 
  @Date: 2017-04-12 14:29:23 
@@ -21,6 +22,8 @@ import logging.config
 import dbutil
 import subprocess
 import ctypes
+import getffhwnd.gbh
+from getffhwnd.gbh import find_ff_hwnd, close_ff, get_pid,get_p_by_pid,close_ff_win
 from logbytask.logtask import LogTask,LogTaskError
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -29,7 +32,7 @@ vm_id = 0
 server_id = 0
 autocmd = ""
 g_rto = 1
-last_rec_time = None
+last_rec_time = time.time()
 isdone = None
 g_logtask = None
 timeout = None
@@ -119,6 +122,7 @@ def init():
     global g_logtask
     g_logtask = LogTask(dbutil, logger)
     make_groupid_file()
+    getffhwnd.gbh.logger = logger
     return True
 
 
@@ -126,85 +130,129 @@ def runcmd():
     p = subprocess.Popen(autocmd, shell=True,stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
 
 def new_task_come():
-    sql = "select a.cur_task_id,b.timeout,a.oprcode from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
-    logger.info(sql)
+    sql = "select a.id,a.cur_task_id,b.timeout,a.oprcode,a.ff_hwnd,a.cur_profile_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
+    logger.debug(sql)
     res =dbutil.select_sql(sql)
     if not res:
-        return None,None,None
-    return res[0][0],res[0][1],res[0][2]
+        return None,None,None,None,None,None
+    return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5]
 
 def is_task_running():
-    sql = "select cur_task_id from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
+    sql = "select id,cur_task_id,ff_hwnd,ff_pids,cur_profile_id from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
+    logger.debug(sql)
     res = dbutil.select_sql(sql)
     if not res:
-        return None
-    return res[0][0]
+        return None,None,None,None,None
+    return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4]
 
 def get_running_task_id():
-    sql = "select cur_task_id,oprcode from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
+    sql = "select id,cur_task_id,ff_hwnd,oprcode,cur_profile_id from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
     res = dbutil.select_sql(sql)
     if not res:
-        return None,None
-    return res[0][0],res[0][1]
+        return None,None,None,None,None
+    return res[0][0],res[0][1], res[0][2],res[0][3], res[0][4]
 
-def set_task_status(status):
+def set_task_status(id,  status):
     ''' 0:nothing to do ,reday 
         1:running
         2:done
         3:noinput
         4:timeout
     '''
-    sql = "update vm_cur_task set status=%d where vm_id=%d and server_id = %d"%(status,int(vm_id), int(server_id))
+    sql = None
+    if status == 2:
+        sql = "update vm_cur_task set status=%d,succ_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP "\
+        " where id=%d"%(
+            status,id)
+    else:
+        sql = "update vm_cur_task set status=%d,update_time=CURRENT_TIMESTAMP "\
+        " where id=%d"%(
+            status,id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
     if ret<0:
         raise Exception,"sql:%s exec failed,ret:%d"%(sql, ret)
 
 
-def set_task_running():
-    sql = "update vm_cur_task set status=1 where vm_id=%d and server_id = %d"%(int(vm_id), int(server_id))
+def set_task_hwnd(id, hwnd, pids):
+    if not hwnd:
+        return
+    pids_str = ','.join(str(p) for p in pids)
+    sql = "update vm_cur_task set ff_hwnd=%d,ff_pids='%s',update_time=CURRENT_TIMESTAMP where "\
+    "id=%d"%(
+        hwnd, pids_str, id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
+    if ret<0:
+        logger.error("sql:%s, ret:%d", sql, ret)
 
 
-def signal_task_noinput():
-    sql = "update vm_cur_task set status=3 where vm_id=%d and server_id = %d"%(int(vm_id), int(server_id))
+def signal_task_noinput(id):
+    sql = "update vm_cur_task set status=3,update_time=CURRENT_TIMESTAMP where id=%d"%(
+        id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
+    if ret<0:
+        logger.error("sql:%s, ret:%d", sql, ret)
     # runcmd()
 
-def update_startup_time():
+def update_startup_time(id):
     #更改为虚拟机启动时间,不在此更新(脚本运行时间)
     # sql = "update vm_group set startup_time=CURRENT_TIMESTAMP,running_script=1 where  groupid=%d and serverid = %d"%(int(groupid), int(serverid))
-    sql = "update vm_cur_task set start_time=CURRENT_TIMESTAMP where vm_id=%d and server_id = %d"%(int(vm_id), int(server_id))
+    sql = "update vm_cur_task set start_time=CURRENT_TIMESTAMP where id=%d"%(
+        id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
     if ret<0:
         logger.error("sql:%s, ret:%d", sql, ret)
 
 def reset_running_minutes():
-    sql = "update vm_cur_task set ran_minutes =0 where server_id=%s and vm_id=%s"%(server_id, vm_id)
+    sql = "update vm_cur_task set ran_minutes =0 where id=%d"%(id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
     if ret<0:
         logger.error("sql:%s, ret:%d", sql, ret)
 
-
+#运行状态任务时间+1
 def add_one_minutes():
-    sql = "update vm_cur_task set ran_minutes=ran_minutes+1 where server_id=%s and vm_id=%s"%(server_id, vm_id)
+    sql = "update vm_cur_task set ran_minutes=ran_minutes+1,update_time=CURRENT_TIMESTAMP where server_id=%d and vm_id=%d and status in (1,2)"%(
+        server_id, vm_id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
     if ret<0:
         logger.error("sql:%s, ret:%d", sql, ret)
+
+def get_task_timeout(task_id):
+    sql = "select timeout from vm_task where id=%d"%(task_id)
+    logger.info(sql)
+    res = dbutil.select_sql(sql)
+    if res:
+        return res[0][0]
+    return None
 
 def get_ran_minutes():
-    sql = "select ran_minutes from vm_cur_task where server_id=%d and vm_id=%d"%(server_id, vm_id)
+    sql = "select id,cur_task_id,ran_minutes,ff_hwnd,ff_pids,cur_profile_id,status from vm_cur_task where server_id=%d and vm_id=%d and status in (1,2)"%(server_id, vm_id)
     res = dbutil.select_sql(sql)
-    if not res:
-        return None
-    return res[0][0]
+    task_min = {}
+    for r in res:
+        task_min[r[0]] = {'task_id':r[1],'mins':r[2],'hwnd': r[3], 'pid_str':r[4],'profile_id':r[5],'status':r[6]}
+    print "task_min:", task_min
+    return task_min
 
-
+def get_ff_hwnds_pids_on_vm():
+    sql = "select ff_hwnd,ff_pids from vm_cur_task where server_id=%d and vm_id=%d and status not in(3,4,5,6) "%(server_id, vm_id)
+    res = dbutil.select_sql(sql)
+    hwnds = []
+    pids = []
+    for r in res:
+        hwnds.append(r[0])
+        pid_str = r[1]
+        if pid_str:
+            ps = pid_str.split(',')
+            for p in ps:
+                pids.append(int(p))
+    return hwnds,pids
+    
 def update_running_minutes():
     global last_rec_time
     curr_time = time.time()
@@ -220,34 +268,172 @@ def make_groupid_file():
     f.write("http://192.168.1.21/vm/ad_stat2?sid=%s&gid=%s"%(server_id,vm_id))
     f.close()
 
+def update_latest_profile_status( task_id, profile_id,status):
+    sql = "update vm_task_profile_latest set status=%d where server_id=%d and vm_id=%d and task_id=%d and profile_id=%d"%(
+        status, server_id, vm_id,task_id, profile_id
+    )
+    logger.info(sql)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        logger.error("sql:%s, ret:%d", sql, ret)
+        
+#start new task, kill known ff process
+def kill_unkown_ff():
+        hwnds,pids = get_ff_hwnds_pids_on_vm()
+        logger.info("find known ff hwnd in 5 secs...")
+        hwnd = find_ff_hwnd(hwnds,5)
+        status = 0
+        if hwnd:
+            logger.info("********************")
+            logger.info("find known ff hwnd in 30 secs over, found the hwnd:%d", hwnd)
+            logger.info("********************")
+        ff_pids = get_pid("firefox.exe",pids)
+        if ff_pids:
+            logger.info("********************")
+            logger.info("find unkown ff pids")
+            logger.info("********************")
+        for pid in ff_pids:
+            close_kill_ff2(hwnd, pid) 
+
+
 def run_new_task():
-    global task_id,last_rec_time,timeout
-    while True:
-        task_id, timeout,oprcode = new_task_come()
-        print task_id,timeout,oprcode
-        if task_id is not None and task_id>=0:
-            logger.info("===============get new task,task_id:%d, timeout:%d,oprcode:%d=============",
-                        task_id, timeout, oprcode)
-            reset_running_minutes()
-            last_rec_time = time.time()
-            runcmd()
-            set_task_status(1)
-            g_logtask.log(server_id, vm_id, task_id, status=1, start_time="CURRENT_TIMESTAMP")
-            update_startup_time()
-            break
-        time.sleep(5)
+    global last_rec_time
+    # while True:
+    id, task_id, timeout,oprcode,last_hwnd,profile_id = new_task_come()
+    print id,task_id,timeout,oprcode
+    if id is not None:
+        logger.info("===============get new task,id:%d,task_id:%d,profile_id:%d timeout:%d,oprcode:%d=============",
+                    id, task_id, profile_id, timeout, oprcode)
+        #关闭ff
+        kill_unkown_ff() 
+        last_rec_time = time.time()
+        runcmd()
+        #查找ff
+        hwnds,pids = get_ff_hwnds_pids_on_vm()
+        logger.info("find ff hwnd in 30 secs...")
+        hwnd = find_ff_hwnd(hwnds)
+        status = 0
+        if not hwnd:
+            logger.info("find ff hwnd in 30 secs over, not found the hwnd")
+            status = 5
+        else:
+            logger.info("find ff hwnd in 30 secs over, found the hwnd:%d", hwnd)
+            status = 1 
+        pids_str = ','.join(str(p) for p in pids)
+        logger.info('exists pids:%s', pids_str)
+        ff_pids = get_pid("firefox.exe",pids)
+        if not ff_pids: 
+            logger.info("find ff pid in 30 secs over, not found the pid")
+            status = 5
+        else:
+            for pid in ff_pids:
+                logger.info("find ff pid in 30 secs over, found the pid:%d", pid)
+                pids_str = ','.join(str(p) for p in pids)
+                logger.info('exists pids222:%s', pids_str) 
+            if hwnd:
+                status = 1 
+            else:
+                status =5
+        if status == 5:
+            logger.info("======status is 5, still to close ff and kill process=====")
+            for pid in ff_pids:
+                close_kill_ff2(hwnd, pid) 
+        set_task_status(id, status)
+        update_latest_profile_status(task_id,profile_id, status)
+        set_task_hwnd(id, hwnd, ff_pids)
+        g_logtask.log(server_id, vm_id, task_id, status=status, start_time="CURRENT_TIMESTAMP")
+        update_startup_time(id)
+        # break
+    time.sleep(5)
 
 def task_done():
-    task_id,oprcode = get_running_task_id()
-    if not task_id:
+    id, task_id, hwnd, oprcode,profile_id = get_running_task_id()
+    if id is None:
         return
-    logger.info("==========the task:%d is done==========",task_id)
-    set_task_status(2)
-    g_logtask.task_done(oprcode)
+    logger.info("==========the id:%d, task:%d is done==========",id, task_id)
+    set_task_status(id,2)
+    update_latest_profile_status(task_id,profile_id, 2)
+    g_logtask.task_done2(oprcode)
     # g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
 
+def close_kill_ff2(h,p):
+    hwnds,pids = get_ff_hwnds_pids_on_vm()
+    if h:
+        close_ff(int(h), hwnds)
+        time.sleep(5)
+    try:
+        proc = get_p_by_pid(p)
+        logger.info("start to kill pid:%d", p)
+
+    # print proc
+        if proc:
+            if proc.pid == 0:
+                logger.info("the ppid is 0,ignore it")
+                return
+            proc.kill() 
+            logger.info("killed pid:%d", proc.pid)
+        else:
+            logger.info("the process:%d is killed when sending close msg to ff", p)
+    except:
+        logger.error("close and kill ff --- process id:%d no longer exist",p)
+
+def close_kill_ff(h,pstr):
+    hwnds,pids = get_ff_hwnds_pids_on_vm()
+    if h:
+        close_ff(int(h), hwnds)
+        time.sleep(5)
+    if pstr:
+        ps = pstr.split(',')
+        for s in ps:
+            p = int(s)
+            try:
+                proc = get_p_by_pid(p)
+                logger.info("start to kill pid:%d", p)
+            # print proc
+                if proc:
+                    if proc.pid == 0:
+                        logger.info("the ppid is 0,ignore it")
+                        continue
+                    proc.kill() 
+                    logger.info("killed pid:%d", proc.pid)
+                else:
+                    logger.info("the process:%d is killed when sending close msg to ff", p)
+            except: 
+                logger.error("close and kill ff --- process id:%d no longer exist",p)
+
+
+#待机时间是否已到
+def holdon_done():
+    task_minutes = update_running_minutes()
+    if not task_minutes:
+        return
+    for t,v in task_minutes.items():
+        print "item:",v
+        task_id = v['task_id']
+        profile_id = v['profile_id']
+        m = v['mins'] 
+        h = v['hwnd']
+        p_str = v['pid_str']
+        status = v['status']
+        timeout = get_task_timeout(task_id)
+        print "timeout:", timeout
+        # if m>= timeout:
+        if m>= timeout and timeout!=0:
+            close_kill_ff(h, p_str)
+            #task finish
+            if status == 2:
+                status =4
+            #task timeout
+            else :
+                status =6
+            set_task_status(t,status)
+            update_latest_profile_status(task_id,profile_id, status)
+            g_logtask.log(server_id, vm_id, task_id, status=4, end_time="CURRENT_TIMESTAMP")
+            logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
+            time.sleep(3)
+
 def main():
-    global last_rec_time,task_id
+    global last_rec_time
     init()
     try:
         if isdone:
@@ -257,22 +443,27 @@ def main():
             task_done()
             while True:
                 run_new_task()
-                while is_task_running():
-                    elapsed = get_last_input()
-                    print 'no input elasped',elapsed
-                    if elapsed>g_rto*60000:
-                        set_task_status(3)
-                        g_logtask.log(server_id, vm_id, task_id,status=3, end_time="CURRENT_TIMESTAMP")
-                        print "sign task noinput"
-                        logger.info("long time no input, elasped:%d", elapsed)
-                    ran_minutes = update_running_minutes()
-                    if ran_minutes>= timeout and timeout!=0:
-                        set_task_status(4)
-                        g_logtask.log(server_id, vm_id, task_id,status=4, end_time="CURRENT_TIMESTAMP")
-                        logger.info("task is timeout,ran_minutes:%d,timeout:%d", ran_minutes, timeout)
-                    time.sleep(5)
+                while True:
+                    id, task_id, h,p_str,profile_id=is_task_running()
+                    if id is not None:
+                        elapsed = get_last_input()
+                        print 'no input elasped',elapsed
+                        if elapsed>g_rto*120000:
+                            close_kill_ff(h, p_str)
+                            set_task_status(id, 3)
+                            update_latest_profile_status(task_id,profile_id, 3)
+                            g_logtask.log(server_id, vm_id, task_id,status=3, end_time="CURRENT_TIMESTAMP")
+                            logger.info("long time no input, elasped:%d", elapsed)
+                        holdon_done()
+                        time.sleep(3)
+                    else:
+                        logger.info("no running task,turn to get new task")
+                        holdon_done()
+                        time.sleep(3)
+                        break
+                holdon_done()
+                time.sleep(5)
 
-            time.sleep(5)
     except:
         logger.error('exception on main_loop', exc_info = True)
 

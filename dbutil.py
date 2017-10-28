@@ -235,7 +235,7 @@ class DBUtil:
 			ret = cursor.execute(sql)
 			cursor.close()
 			self._conn.commit()
-			self._logger.info("ret=%d" % ret)
+			# self._logger.info("ret=%d" % ret)
 			return ret
 		except Exception, e:
 			self._logger.error('exception', exc_info = True)

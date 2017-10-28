@@ -206,6 +206,7 @@ class TaskGroup(object):
 
         sql ="update vm_task_group set times=FLOOR(times_start_range + (RAND() * (times_end_range-times_start_range)))" \
         "where templ_id>0 and id=%d"%(task_group_id) 
+        print sql
         ret = db.execute_sql(sql)
         if ret<0:
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)

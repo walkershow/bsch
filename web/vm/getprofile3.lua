@@ -36,11 +36,7 @@ if next(res)==nil then
     db:set_keepalive(10000, 100)
 return
 end
-local view = template.new "profile.html"
-view.profile_id = res[1].profile_id
-view.profile_name = res[1].name
-view.profile_path= res[1].shortcut
-view:render()
+ngx.say(res[1].shortcut)
     
 db:set_keepalive(10000, 100)
 
