@@ -160,8 +160,9 @@ def set_task_status(id,  status):
         4:timeout
     '''
     sql = None
+    #状态完成时将运行时间重置为0,进入待机状态
     if status == 2:
-        sql = "update vm_cur_task set status=%d,succ_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP "\
+        sql = "update vm_cur_task set status=%d,succ_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP,ran_minutes=0 "\
         " where id=%d"%(
             status,id)
     else:
@@ -223,12 +224,12 @@ def add_one_minutes():
         logger.error("sql:%s, ret:%d", sql, ret)
 
 def get_task_timeout(task_id):
-    sql = "select timeout from vm_task where id=%d"%(task_id)
+    sql = "select timeout,standby_time from vm_task where id=%d"%(task_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
-        return res[0][0]
-    return None
+        return res[0][0],res[0][1]
+    return None,None
 
 def get_ran_minutes():
     sql = "select id,cur_task_id,ran_minutes,ff_hwnd,ff_pids,cur_profile_id,status from vm_cur_task where server_id=%d and vm_id=%d and status in (1,2)"%(server_id, vm_id)
@@ -401,7 +402,6 @@ def close_kill_ff(h,pstr):
             except: 
                 logger.error("close and kill ff --- process id:%d no longer exist",p)
 
-
 #待机时间是否已到
 def holdon_done():
     task_minutes = update_running_minutes()
@@ -415,22 +415,31 @@ def holdon_done():
         h = v['hwnd']
         p_str = v['pid_str']
         status = v['status']
-        timeout = get_task_timeout(task_id)
+        timeout,standby_time = get_task_timeout(task_id)
         print "timeout:", timeout
         # if m>= timeout:
-        if m>= timeout and timeout!=0:
-            close_kill_ff(h, p_str)
-            #task finish
-            if status == 2:
-                status =4
-            #task timeout
-            else :
+        if status == 1:
+            if m>= timeout: 
+                close_kill_ff(h, p_str)
+                #task timeout
                 status =6
-            set_task_status(t,status)
-            update_latest_profile_status(task_id,profile_id, status)
-            g_logtask.log(server_id, vm_id, task_id, status=4, end_time="CURRENT_TIMESTAMP")
-            logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
-            time.sleep(3)
+                set_task_status(t,status)
+                update_latest_profile_status(task_id,profile_id, status)
+                g_logtask.log(server_id, vm_id, task_id, status=status, end_time="CURRENT_TIMESTAMP")
+                logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
+                time.sleep(3)
+        elif status == 2:
+            if m>= standby_time :
+                close_kill_ff(h, p_str)
+                #task finish
+                status =4
+                set_task_status(t,status)
+                update_latest_profile_status(task_id,profile_id, status)
+                g_logtask.log(server_id, vm_id, task_id, status=status, end_time="CURRENT_TIMESTAMP")
+                logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
+                time.sleep(3)
+        else:
+            continue
 
 def main():
     global last_rec_time

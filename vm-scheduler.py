@@ -83,7 +83,8 @@ def log_allot_status(server_id, task_id):
         raise Exception, "%s excute error;ret:%d" % (sql, ret)
 
 def vpn_status():
-    sql = "select vpnstatus,update_time from vpn_status where serverid=%d and ip is not null and ip!='' "%(g_serverid)
+    #sql = "select vpnstatus,update_time from vpn_status where serverid=%d and ip is not null and ip!='' "%(g_serverid)
+    sql = "select vpnstatus,update_time from vpn_status where serverid=%d "%(g_serverid)
     res = dbutil.select_sql(sql)
     if res:
         status = res[0][0]
@@ -92,7 +93,8 @@ def vpn_status():
     return None,None
 
 def vpn_update_time():
-    sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
+    #sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
+    sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
     res = dbutil.select_sql(sql)
     print "res", res
     if res:
@@ -106,7 +108,7 @@ def vm_last_succ_time(vm_id):
     res = dbutil.select_sql(sql)
     if res:
         return res[0][0]
-    return None
+    return '1970-1-1 00:00:00'
 
 def right_to_allot(vm_id):
     succ_time = vm_last_succ_time(vm_id)
