@@ -73,7 +73,7 @@ def select_sql(sql):
 		create_connection()
 	if db_conn is None:
 		# logger.error('db_conn is None')
-		t_lock.release()			
+					
 		return None 
 
 	try:

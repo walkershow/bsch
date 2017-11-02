@@ -1,0 +1,1 @@
+python .\copyxpi.py -x "\\192.168.1.56\e\19w\PC" -t 1 

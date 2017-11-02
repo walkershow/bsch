@@ -19,6 +19,7 @@ from taskgroup import TaskGroup
 sys.path.append("..")
 import dbutil
 import random
+from parallel import ParallelControl,ParallelControlException
 
 logger = None
 
@@ -30,14 +31,13 @@ class TaskAllot(object):
 
     #cur_date = None
 
-    def __init__(self,want_init, server_id, db):
+    def __init__(self,want_init, server_id, pc, db):
         self.db = db 
         self.cur_date = None
         self.want_init = want_init
         self.server_id = server_id
         self.groupids_dict = {}
-
-
+        self.pc =  pc
 
     def log_task_id(self,id, task_id):
         sql ="update vm_allot_task set cur_task_id=%d where id=%d"%(task_id,id)
@@ -62,6 +62,7 @@ class TaskAllot(object):
                 print "end new day to reinit..."
                 #logger.info("end new day to reinit...")
 
+    #deprecated
     def get_running_groupids(self):
         '''获取运行状态的任务组
         '''
@@ -73,6 +74,25 @@ class TaskAllot(object):
             id = r[0]
             group_ids.append(id)
         return group_ids
+
+    def get_band_run_groupids(self):
+        '''获取运行状态的任务组
+        '''
+        group_ids = []
+        sql = "select task_group_id from vm_cur_task where server_id=%d and status in(-1,1) and task_group_id !=0 "%(self.server_id)
+        print sql
+        res = dbutil.select_sql(sql)
+        for r in res:
+            id = r[0]
+            #并行数爆了,才加入band group
+            if self.pc.is_ran_out_parallel_num(id):
+                group_ids.append(id)
+        print group_ids
+
+        pout_ids_set = self.pc.get_ran_out_parallel_task_set()
+        print pout_ids_set
+        return set(group_ids)|pout_ids_set
+    
 
     def allot_by_priority(self, default_path):
         try:
@@ -103,18 +123,21 @@ class TaskAllot(object):
                     
 
             res = self.db.select_sql(sql)
-            ids = []
+            ids = set() 
             for r in res:
-                ids.append(r[0])
-            rids = self.get_running_groupids()
+                ids.add(r[0])
+            rid_set = self.get_band_run_groupids()
+            print "band run set", rid_set
+            band_str = ",".join(str(s) for s in rid_set)
+            logger.info("band task_group_id:%s", band_str)
                 
-            selected_ids = list(set(ids).difference(set(rids)))
+            selected_ids = list(set(ids) - rid_set)
             print selected_ids
 
             # logger.info("init task data:%d",ret)
             if not selected_ids:
                 #不存在优先级高的任务组,执行随机分配
-                # logger.info("no priority task, get rand taskgroup")
+                logger.info("no priority task, get rand taskgroup")
                 print("no priority task, get rand taskgroup")
                 return self.allot_by_rand(default_path)
             else:
@@ -153,22 +176,22 @@ class TaskAllot(object):
             ids = []
             for r in res:
                 ids.append(r[0])
-            rids = self.get_running_groupids()
-                
-            selected_ids = list(set(ids).difference(set(rids)))
+            rid_set = self.get_band_run_groupids()
+            print "band run set", rid_set
+            band_str = ",".join(str(s) for s in rid_set)
+            logger.info("band task_group_id:%s", band_str)
+            selected_ids = list(set(ids) - rid_set)
 
             task = None
             task_group_id = 0 
             if not selected_ids:
-                # logger.info("get default taskgroup")
+                logger.info("get default taskgroup")
                 task = TaskGroup.getDefaultTask(self.db)
                 print task
                 if task.gen_type == 0:
                     task.allot2(default_path)
                 else:
                     task.allot(default_path)
-
-                # TaskGroup.add_default_ran_times(self.db)
             else:
                 task_group_id = random.choice(selected_ids)
                 task = self.handle_taskgroup(task_group_id, default_path)
@@ -187,11 +210,7 @@ class TaskAllot(object):
             task.allot2(default_path)
         else:
             task.allot(default_path)
-        # if task.is_default:
-        #     TaskGroup.add_default_ran_times(self.db)
-        # else:
-        #     tg.add_ran_times(task.id)
-        #     tg.add_impl_ran_times(task.id)
+
         return task
     
     def add_ran_time(self, task_id,task_group_id):
@@ -207,29 +226,31 @@ class TaskAllot(object):
 
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm"
+    dbutil.db_name = "vm3"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    #t=TaskAllot(0, 1, dbutil)
-    task_group_id = None
-    print len(sys.argv)
-    if len(sys.argv)>1:
-        task_group_id = int(sys.argv[1])
-        print task_group_id
-        TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
+    pc = ParallelControl(18, dbutil)
+    t=TaskAllot(0, 1,pc, dbutil)
+    t.allot_by_priority("d:\\10.bat")
+    # task_group_id = None
+    # print len(sys.argv)
+    # if len(sys.argv)>1:
+    #     task_group_id = int(sys.argv[1])
+    #     print task_group_id
+    #     TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
+    # # while True:
+    # #     t.allot_by_priority("d:\\10.bat")
+    # #     # t.allot_by_rand("d:\\10.bat")
+    # #     time.sleep(1)
+    #     TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
+    # t=TaskAllot(1,1, dbutil)
+    # if task_group_id :
+    #     exit(0)
     # while True:
-    #     t.allot_by_priority("d:\\10.bat")
-    #     # t.allot_by_rand("d:\\10.bat")
-    #     time.sleep(1)
-        TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
-    t=TaskAllot(1,1, dbutil)
-    if task_group_id :
-        exit(0)
-    while True:
-        try:
-            t.reset_when_newday()
-            time.sleep(10)
-        except:
-            time.sleep(5)
-            continue
+    #     try:
+    #         t.reset_when_newday()
+    #         time.sleep(10)
+    #     except:
+    #         time.sleep(5)
+    #         continue

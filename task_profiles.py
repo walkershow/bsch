@@ -9,18 +9,21 @@
 import dbutil
 import random
 from logbytask.logtask import LogTask,LogTaskError
+# from task.parallel import ParallelControl,ParallelControlException
 
 class TaskProfile(object):
     db = None
     logger = None
     server_id = None
     log_task = None
+    pc = None
     
-    def __init__(self, server_id, dbs, log_handler):
+    def __init__(self, server_id, dbs, pc, log_handler):
         TaskProfile.db = dbs
         TaskProfile.logger = log_handler
         TaskProfile.server_id = server_id
         TaskProfile.log_task = LogTask(dbs, log_handler)
+        TaskProfile.pc = pc
 
     def get_task_type(self, task_id):
         sql = "select type,terminal_type from vm_task where id=%d "%(task_id)
@@ -117,6 +120,7 @@ class TaskProfile(object):
         self.logger.info("task id:%d will run allot profile id:%d", task_id, profile_id)
         self.log_task.gen_oprcode_bytask(self.server_id, vm_id, task_id)
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id, task_id)
+        self.pc.add_allocated_num(task_group_id)
 
         sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes)"\
         " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0) "%(
@@ -162,5 +166,6 @@ if __name__ == '__main__':
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    t=TaskProfile(1, dbutil, None)
+    pc = ParallelControl(g_serverid, dbutil)
+    t=TaskProfile(1, dbutil, pc, None)
     t.set_cur_task_profile(1,1,1)

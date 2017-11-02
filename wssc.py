@@ -24,6 +24,8 @@ import subprocess
 import ctypes
 import getffhwnd.gbh
 from getffhwnd.gbh import find_ff_hwnd, close_ff, get_pid,get_p_by_pid,close_ff_win
+import urllib
+import requests
 from logbytask.logtask import LogTask,LogTaskError
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
@@ -308,7 +310,7 @@ def run_new_task():
         #关闭ff
         kill_unkown_ff() 
         last_rec_time = time.time()
-        runcmd()
+        open_ff(id, task_id, profile_id)
         #查找ff
         hwnds,pids = get_ff_hwnds_pids_on_vm()
         logger.info("find ff hwnd in 30 secs...")
@@ -339,6 +341,9 @@ def run_new_task():
             logger.info("======status is 5, still to close ff and kill process=====")
             for pid in ff_pids:
                 close_kill_ff2(hwnd, pid) 
+        elif status == 1:
+            logger.info("find ff win,then start zhixing.exe")
+            runcmd()
         set_task_status(id, status)
         update_latest_profile_status(task_id,profile_id, status)
         set_task_hwnd(id, hwnd, ff_pids)
@@ -356,6 +361,40 @@ def task_done():
     update_latest_profile_status(task_id,profile_id, 2)
     g_logtask.task_done2(oprcode)
     # g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
+
+def open_ff(id ,task_id, profile_id):
+    i = 0 
+    while True:
+        try:
+            i = i +1
+            if i >5 :
+                logger.info("open_ff times is out:%d",i)
+                break
+            url="http://192.168.1.21/vm/getprofile3?serverid=%d&vmid=%d"%(server_id, vm_id) 
+            # print url
+            return_data = requests.get(url)
+            # print return_data
+            profile = return_data.text
+            logger.info("open ff link:%s", profile)
+            # print profile
+            if profile.strip() == 'nil':
+                print 'nil...'
+                logger.error("ff link is nil, set status to 5")
+                status = 5
+                set_task_status(id, status)
+                update_latest_profile_status(task_id,profile_id, status)
+                g_logtask.log(server_id, vm_id, task_id, status=status, start_time="CURRENT_TIMESTAMP")
+                update_startup_time(id)
+                break
+
+            cmd = "start "+ profile
+            logger.info("%s", cmd)
+            # print cmd
+            os.system(cmd)
+        except:
+            logger.error("http request error")
+            continue
+        break
 
 def close_kill_ff2(h,p):
     hwnds,pids = get_ff_hwnds_pids_on_vm()
@@ -416,9 +455,12 @@ def holdon_done():
         p_str = v['pid_str']
         status = v['status']
         timeout,standby_time = get_task_timeout(task_id)
-        print "timeout:", timeout
+        print "timeout:", timeout,"standby:",standby_time
+        logger.info("timeout:%d,standby:%d", timeout, standby_time)
+        logger.info("task_id:%d, status:%d,ran_min:%d", task_id, status,m)
         # if m>= timeout:
         if status == 1:
+            logger.info("checking timeout task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= timeout: 
                 close_kill_ff(h, p_str)
                 #task timeout
@@ -429,6 +471,7 @@ def holdon_done():
                 logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
                 time.sleep(3)
         elif status == 2:
+            logger.info("checking standby task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= standby_time :
                 close_kill_ff(h, p_str)
                 #task finish
@@ -436,7 +479,7 @@ def holdon_done():
                 set_task_status(t,status)
                 update_latest_profile_status(task_id,profile_id, status)
                 g_logtask.log(server_id, vm_id, task_id, status=status, end_time="CURRENT_TIMESTAMP")
-                logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
+                logger.info("id:%d task:%d is standby,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
                 time.sleep(3)
         else:
             continue

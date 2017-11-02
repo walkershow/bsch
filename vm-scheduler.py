@@ -30,6 +30,8 @@ import task.taskallot
 from multiprocessing import Process, Queue
 import vms,vm_utils
 from task_profiles import TaskProfile
+import task.parallel
+from task.parallel import ParallelControl,ParallelControlException
 from logbytask.logtask import LogTask,LogTaskError
 global g_vManager_path
 global g_current_dir
@@ -50,6 +52,7 @@ vm_names = []
 vm_ids = []
 g_reset_waittime = 120
 g_pb = 4
+g_pc = None
 
 #标识是否是进入暂停状态 0:否 1:是
 
@@ -155,6 +158,7 @@ def pause_resume_vm():
             #恢复
             elif last_status ==2 and status ==1:
                 vms.resume_allvm(g_serverid) 
+                g_pc.reset_allocated_num()
             elif last_status == 2 and status == 2:
                 if not is_vpn_2():
                     logger.info("status and last_status is 2 but it'nt notify vpn chagne 2")
@@ -292,7 +296,7 @@ def main_loop():
                         g_dsp_tmp = g_dsp
                         g_dsp_tmp = g_dsp_tmp % (vm_names[i])
                         task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
-                        if right_to_allot(vm_ids[i]) or task_id==0:
+                        if right_to_allot(vm_ids[i]) or task_id==0 or g_pc.is_parallel(task_group_id):
                             # if task_id == 0 :
                             #     if not normal_task_canbe_run():
                             #         logger.info("there's 0 task is pending or running")
@@ -315,7 +319,6 @@ def main_loop():
             logger.error('exception on main_loop', exc_info=True)
             time.sleep(3)
             continue
-
 
 def reset():
     global g_start_idx,vm_names, vm_ids 
@@ -441,11 +444,13 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot,g_logtask,g_task_profile
+    global g_taskallot,g_logtask,g_task_profile,g_pc
     task.taskallot.logger = logger
-    g_taskallot = TaskAllot(g_want_init_task,g_serverid, dbutil)
+    task.parallel.logger = logger
+    g_pc = ParallelControl(g_serverid, dbutil)
+    g_taskallot = TaskAllot(g_want_init_task,g_serverid, g_pc,dbutil)
     g_logtask = LogTask(dbutil, logger)
-    g_task_profile = TaskProfile(g_serverid, dbutil, logger)
+    g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
 
     vms.logger = logger
     vms.dbutil = dbutil
