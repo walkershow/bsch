@@ -103,6 +103,40 @@ def poweroffVM(vmName):
     return 1
 
 
+def resetVM(vmName):
+    logger.info(" ==========starting resetVM:%s=============",
+                vmName)
+    global g_vManager_path, g_current_dir
+    cmd = "vboxmanage controlvm " + vmName + " reset"
+    logger.info(" cmd:%s", cmd)
+    j = 0
+    while j < 3:
+        os.chdir(g_vManager_path)
+        if vmName in list_allrunningvms():
+            os.chdir(g_vManager_path)
+            status = os.system(cmd)
+            os.chdir(g_current_dir)
+            logger.info(" cmd ret=%d", status)
+            if 0 != status:
+                logger.info(
+                    " poweroff %s ,cmd %s failed and will sleep 5s to retry",
+                     vmName, cmd)
+                time.sleep(5)
+                j = j + 1
+                continue
+            j = j + 1
+            logger.info(" poweroff %s retry %d times * 5s", vmName,
+                        j)
+        else:
+            logger.info(
+                " ==============%s is not running,exit poweroffvm============",
+                 vmName)
+            return 0
+    logger.error(
+        " ================poweroff %s failed after %d times * 45s======================",
+         vmName, j)
+    return 1
+
 def shutdownVM(vmName):
     logger.info(" ==========starting shutdownVM:%s=============",
                 vmName)

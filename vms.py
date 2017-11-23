@@ -47,7 +47,8 @@ def get_vms(server_id):
     return running_vmnames, running_vmids
 
 def start_vms(server_id, srange, erange):
-    sql= "select id,vm_id,vm_name from vm_list where server_id=%d and enabled=0 and vm_id between %d and %d"%(server_id,srange, erange)
+    #sql= "select id,vm_id,vm_name from vm_list where server_id=%d and enabled=0 and vm_id between %d and %d"%(server_id,srange, erange)
+    sql= "select id,vm_id,vm_name from vm_list where server_id=%d and enabled=0 "%(server_id)
     logger.info("%s", sql)
     res = dbutil.select_sqlwithdict(sql)
     running_vmnames,running_vmids = [],[]
@@ -89,6 +90,26 @@ def shutdown_allvm(server_id):
             logger.error("exception on excute_sql:%s", sql)
             continue
 
+
+def reset_allvm(server_id):
+    sql_all = "select id,vm_id,vm_name from vm_list where server_id=" + str(
+        server_id)
+    sql_updatestatus = "update vm_list set status=%d, shutdown_time=CURRENT_TIMESTAMP where id=%d"
+    res = dbutil.select_sqlwithdict(sql_all)
+    if res is None or len(res) <= 0:
+        logger.info("empty res")
+        return
+    for row in res:
+        ret = vm_utils.resetVM(row["vm_name"])
+        if ret != 0:
+            logger.info("reset error:%d,%s", row["vm_id"], row["vm_name"])
+            continue
+        sql = sql_updatestatus % (1, row["id"])
+        logger.info(sql)
+        ret = dbutil.execute_sql(sql)
+        if ret < 0:
+            logger.error("exception on excute_sql:%s", sql)
+            continue
 
 def pause_allvm(server_id):
     sql_all = "select vm_id,vm_name from vm_list where  server_id=" + str(

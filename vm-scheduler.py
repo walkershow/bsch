@@ -38,6 +38,7 @@ global g_current_dir
 global g_reset
 global g_cur_running_count
 global g_origin_limit
+from dbutil import DBUtil
 g_serverid = 0
 g_rto = 0
 g_rto_tmp = 0
@@ -48,6 +49,7 @@ g_task_profile = None
 g_cur_date = datetime.date.today()
 g_last_shutdown_time = None
 g_start_idx = 0
+g_vpn_db = None
 vm_names = []
 vm_ids = []
 g_reset_waittime = 120
@@ -97,37 +99,67 @@ def vpn_status():
 
 def vpn_update_time():
     #sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
-    sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
+    sql = "select update_time,ip from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
     res = dbutil.select_sql(sql)
     print "res", res
     if res:
         update_time = res[0][0]
+        ip = res[0][1]
         print update_time
-        return  update_time
-    return None
+        return  update_time,ip
+    return None,None
 
-def vm_last_succ_time(vm_id):
-    sql = "select max(succ_time) from vm_cur_task where server_id=%d and vm_id=%d and status=2"%(g_serverid,vm_id)
+def vm_last_succ_time(task_group_id):
+    #sql = "select max(succ_time) from vm_cur_task where server_id=%d and vm_id=%d and status=2"%(g_serverid,vm_id)
+    sql = "select max(succ_time) from vm_cur_task where server_id=%d and task_group_id=%d and status>=2"%(
+        g_serverid,task_group_id)
     res = dbutil.select_sql(sql)
     if res:
         return res[0][0]
     return '1970-1-1 00:00:00'
 
-def right_to_allot(vm_id):
-    succ_time = vm_last_succ_time(vm_id)
-    redial_time = vpn_update_time()
+def ip_invalid_time():
+    sql = "select `value` from vm_sys_dict where `key`='ip_invalid_time'"
+    res = dbutil.select_sql(sql)
+    invalid_time = None
+    if not res:
+        invalid_time = 21600
+    else:
+        invalid_time = int(res[0][0])
+    return invalid_time
+
+
+def is_ip_valid(ip):
+    # invalid_time = ip_invalid_time()
+    # sql = "select id from used_ipinfo1 where ip='%s' and TIME_TO_SEC(timediff(now(),usetime))<%d"%(ip, invalid_time)
+    # res = g_vpn_db.select_sql(sql)
+    # logger.info(sql)
+    # print res
+    # if res:
+    #     return False
+    return True
+
+def right_to_allot(task_group_id):
+    succ_time = vm_last_succ_time(task_group_id)
+    redial_time,ip = vpn_update_time()
     print "right to allot",succ_time, redial_time
-    logger.info("last_succ_time:%s, redial_time:%s", succ_time, redial_time)
+    logger.info("task_group_id:%d,last_succ_time:%s, redial_time:%s",task_group_id, succ_time, redial_time)
     rtime ,stime = None,None
     if redial_time:
         rtime = time.strptime(str(redial_time),"%Y-%m-%d %H:%M:%S")
         if not succ_time:
-            return True
+            if is_ip_valid(ip):
+                return True
+            else:
+                logger.info("ip:%s is used", ip)
         else:
             stime = time.strptime(str(succ_time),"%Y-%m-%d %H:%M:%S")
 
         if stime< rtime:
-            return True
+            if is_ip_valid(ip):
+                return True
+            else:
+                logger.info("ip:%s is used", ip)
         else:
             logger.info("succ_time>=redial_time")
     return False
@@ -187,11 +219,11 @@ def get_shutdown_time():
     return time_list
 
 
-def shutdown_vms_oneday():
+def reset_vms_oneday():
     global g_last_shutdown_time
     tlist = get_shutdown_time()
     if not tlist:
-        logger.info("shutdown time list is empty")
+        logger.info("reset time list is empty")
         return
     print tlist
     cur_hour = get_cur_hour()
@@ -199,28 +231,12 @@ def shutdown_vms_oneday():
     if str(cur_hour) in tlist and cur_hour != g_last_shutdown_time:
         g_last_shutdown_time = cur_hour
         logger.info("time:%d", cur_hour)
-        logger.info("=======start to shutdown all vm one day============")
+        logger.info("=======start to reset all vm one day============")
         vms.resume_allvm(g_serverid)
-        vms.shutdown_allvm(g_serverid)
-        while True:
-            time.sleep(30)
-            running = False
-            for vm in vm_utils.list_allrunningvms():
-                running = True
-                break
-            if running:
-                time.sleep(10)
-                vms.resume_allvm(g_serverid)
-                vms.shutdown_allvm(g_serverid)
-                continue
-            else:
-                break
-        logger.info("shutdown complete, sleep %s", g_reset_waittime)
+        vms.reset_allvm(g_serverid)
+        logger.info("reset complete, sleep %s", g_reset_waittime)
         time.sleep(g_reset_waittime)
-        logger.info("=======ent to shutdown all vm one day============")
-        logger.info("========start reset all vm =============")
-        reset()
-        logger.info("=========end reset all vm ================")
+        logger.info("=======ent to reset all vm one day============")
 
 
 def shutdown_by_flag():
@@ -280,7 +296,7 @@ def main_loop():
             #     logger.info("exit the main loop!!!")
             #     os._exit(0)
             #     break
-            # shutdown_vms_oneday()
+            reset_vms_oneday()
             for i in range(0, len(vm_ids)):
                 sqltmp = sql %(g_serverid, vm_ids[i])
                 print sqltmp
@@ -296,7 +312,8 @@ def main_loop():
                         g_dsp_tmp = g_dsp
                         g_dsp_tmp = g_dsp_tmp % (vm_names[i])
                         task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
-                        if right_to_allot(vm_ids[i]) or task_id==0 or g_pc.is_parallel(task_group_id):
+                        # if right_to_allot(vm_ids[i]) or task_id==0 or g_pc.is_parallel(task_group_id):
+                        if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
                             # if task_id == 0 :
                             #     if not normal_task_canbe_run():
                             #         logger.info("there's 0 task is pending or running")
@@ -323,12 +340,7 @@ def main_loop():
 def reset():
     global g_start_idx,vm_names, vm_ids 
     vms.shutdown_allvm(g_serverid)
-    if g_start_idx == 0:
-        vm_names, vm_ids= vms.start_vms(g_serverid, 1, 8)
-        g_start_idx == 1
-    else:
-        vm_names, vm_ids= vms.start_vms(g_serverid, 9, 16)
-        g_start_idx = 0
+    vm_names, vm_ids= vms.start_vms(g_serverid, 1, 8)
 
 def init():
     parser = optparse.OptionParser()
@@ -437,6 +449,12 @@ def init():
     dbutil.db_user = options.username
     dbutil.db_pwd = options.password
     dbutil.logger = logger
+
+    global g_vpn_db
+    g_vpn_db = DBUtil(logger,options.db_ip,3306, "vpntest", options.username, options.password,'utf8')
+
+
+    
     #启动时的时间跟设置时间不一致,关机开关开启
     cur_hour = get_cur_hour()
     tlist = get_shutdown_time()
@@ -481,3 +499,7 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # init()
+    # g_vpn_db.create_connection()
+    # print is_ip_valid('61.145.245.183')
+    # print is_ip_valid('115.225.153.71')

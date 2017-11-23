@@ -26,6 +26,32 @@ if gid == 0 then
     ngx.exit(ngx.HTTP_BAD_REQUEST)
 end
 
+local a_times = tonumber(args.a_times) or 0
+local b_times = tonumber(args.b_times) or 0
+local c_times = tonumber(args.c_times) or 0
+function stat()
+    sql = string.format([[insert into ad_click_statistics(id,a_times,b_times,c_times,click_date,update_time) 
+        values(%d,a_times+%d,b_times+%d,c_times+%d,CURRENT_DATE,CURRENT_TIMESTAMP)
+        on duplicate key update a_times=a_times+%d,b_times=b_times+%d,c_times=c_times+%d, update_time=CURRENT_TIMESTAMP]], 
+        id,a_times,b_times,c_times,a_times,b_times,c_times)
+    ngx.log(ngx.INFO, sql)
+    local  res, err, errno, sqlstate = db:query(sql, 10)
+    if not res then
+        ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
+        db:set_keepalive(10000, 100)
+        ngx.say("failed")
+        return
+    end
+    ngx.say("succ")
+    ngx.eof()
+end
+
+local check= tonumber(args.check) or 1
+
+if check == 0 then
+    stat()
+    return
+end
 
 sql_oprcode = string.format("select cur_task_id,task_group_id,oprcode from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=%d and status=1" , sid,gid,id) 
 -- ngx.log(ngx.ERR, sql_oprcode)
@@ -50,25 +76,27 @@ ngx.log(ngx.ERR, oprcode)
 
 if id ~= task_id then
     ngx.log(ngx.ERR, "arg task id:%d ~= cur_task_id:%d", id,task_id)
-end
-
-local a_times = tonumber(args.a_times) or 0
-local b_times = tonumber(args.b_times) or 0
-local c_times = tonumber(args.c_times) or 0
-sql = string.format([[insert into ad_click_statistics(id,a_times,b_times,c_times,click_date,update_time) 
-    values(%d,a_times+%d,b_times+%d,c_times+%d,CURRENT_DATE,CURRENT_TIMESTAMP)
-    on duplicate key update a_times=a_times+%d,b_times=b_times+%d,c_times=c_times+%d, update_time=CURRENT_TIMESTAMP]], 
-    id,a_times,b_times,c_times,a_times,b_times,c_times)
-ngx.log(ngx.INFO, sql)
-local  res, err, errno, sqlstate = db:query(sql, 10)
-if not res then
-    ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
-    db:set_keepalive(10000, 100)
-    ngx.say("failed")
     return
 end
-ngx.say("succ")
-ngx.eof()
+
+stat()
+-- local a_times = tonumber(args.a_times) or 0
+-- local b_times = tonumber(args.b_times) or 0
+-- local c_times = tonumber(args.c_times) or 0
+-- sql = string.format([[insert into ad_click_statistics(id,a_times,b_times,c_times,click_date,update_time) 
+--     values(%d,a_times+%d,b_times+%d,c_times+%d,CURRENT_DATE,CURRENT_TIMESTAMP)
+--     on duplicate key update a_times=a_times+%d,b_times=b_times+%d,c_times=c_times+%d, update_time=CURRENT_TIMESTAMP]], 
+--     id,a_times,b_times,c_times,a_times,b_times,c_times)
+-- ngx.log(ngx.INFO, sql)
+-- local  res, err, errno, sqlstate = db:query(sql, 10)
+-- if not res then
+--     ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
+--     db:set_keepalive(10000, 100)
+--     ngx.say("failed")
+--     return
+-- end
+-- ngx.say("succ")
+-- ngx.eof()
 
 local up_col = nil
 if a_times ~=0 then
@@ -101,7 +129,8 @@ if next(res) == nil then
 else
     local ip= res[1].ip
     local area= res[1].area
-    ip_info =(ip or '').." ["..(area or '').."]"
+    -- ip_info =(ip or '').." ["..(area or '').."]"
+    ip_info = ip or ''
 end
 ngx.log(ngx.INFO,ip_info)
 

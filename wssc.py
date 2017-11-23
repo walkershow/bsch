@@ -27,6 +27,8 @@ from getffhwnd.gbh import find_ff_hwnd, close_ff, get_pid,get_p_by_pid,close_ff_
 import urllib
 import requests
 from logbytask.logtask import LogTask,LogTaskError
+import traceback
+import singleton
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
@@ -163,8 +165,13 @@ def set_task_status(id,  status):
     '''
     sql = None
     #状态完成时将运行时间重置为0,进入待机状态
-    if status == 2:
+    if status == 2 :
         sql = "update vm_cur_task set status=%d,succ_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP,ran_minutes=0 "\
+        " where id=%d"%(
+            status,id)
+    #任务超时时也记录成功时间
+    elif status == 6:
+        sql = "update vm_cur_task set status=%d,succ_time=CURRENT_TIMESTAMP,update_time=CURRENT_TIMESTAMP"\
         " where id=%d"%(
             status,id)
     else:
@@ -237,8 +244,9 @@ def get_ran_minutes():
     sql = "select id,cur_task_id,ran_minutes,ff_hwnd,ff_pids,cur_profile_id,status from vm_cur_task where server_id=%d and vm_id=%d and status in (1,2)"%(server_id, vm_id)
     res = dbutil.select_sql(sql)
     task_min = {}
-    for r in res:
-        task_min[r[0]] = {'task_id':r[1],'mins':r[2],'hwnd': r[3], 'pid_str':r[4],'profile_id':r[5],'status':r[6]}
+    if res:
+        for r in res:
+            task_min[r[0]] = {'task_id':r[1],'mins':r[2],'hwnd': r[3], 'pid_str':r[4],'profile_id':r[5],'status':r[6]}
     print "task_min:", task_min
     return task_min
 
@@ -247,13 +255,17 @@ def get_ff_hwnds_pids_on_vm():
     res = dbutil.select_sql(sql)
     hwnds = []
     pids = []
-    for r in res:
-        hwnds.append(r[0])
-        pid_str = r[1]
-        if pid_str:
-            ps = pid_str.split(',')
-            for p in ps:
-                pids.append(int(p))
+    if res:
+        for r in res:
+            hwnds.append(r[0])
+            pid_str = r[1]
+            if pid_str:
+                ps = pid_str.split(',')
+                for p in ps:
+                    s = p.strip()
+                    if not s:
+                        continue
+                    pids.append(int(s))
     return hwnds,pids
     
 def update_running_minutes():
@@ -288,12 +300,15 @@ def kill_unkown_ff():
         status = 0
         if hwnd:
             logger.info("********************")
-            logger.info("find known ff hwnd in 30 secs over, found the hwnd:%d", hwnd)
+            logger.info("find unknown ff hwnd in 30 secs over, found the hwnd:%d", hwnd)
             logger.info("********************")
         ff_pids = get_pid("firefox.exe",pids)
         if ff_pids:
+            pids_str = ','.join(str(p) for p in pids)
+            ff_pids_str = ','.join(str(p) for p in ff_pids)
             logger.info("********************")
-            logger.info("find unkown ff pids")
+            logger.info("find known ff pids:%s", pids_str)
+            logger.info("find unkown ff pids:%s", ff_pids_str)
             logger.info("********************")
         for pid in ff_pids:
             close_kill_ff2(hwnd, pid) 
@@ -308,7 +323,7 @@ def run_new_task():
         logger.info("===============get new task,id:%d,task_id:%d,profile_id:%d timeout:%d,oprcode:%d=============",
                     id, task_id, profile_id, timeout, oprcode)
         #关闭ff
-        kill_unkown_ff() 
+        # kill_unkown_ff() 
         last_rec_time = time.time()
         open_ff(id, task_id, profile_id)
         #查找ff
@@ -360,6 +375,7 @@ def task_done():
     set_task_status(id,2)
     update_latest_profile_status(task_id,profile_id, 2)
     g_logtask.task_done2(oprcode)
+    dbutil.close_connection()
     # g_logtask.log(server_id, vm_id, task_id, status="2", end_time="CURRENT_TIMESTAMP")
 
 def open_ff(id ,task_id, profile_id):
@@ -390,6 +406,7 @@ def open_ff(id ,task_id, profile_id):
             cmd = "start "+ profile
             logger.info("%s", cmd)
             # print cmd
+            os.system("d:\\y.exe")
             os.system(cmd)
         except:
             logger.error("http request error")
@@ -425,7 +442,10 @@ def close_kill_ff(h,pstr):
     if pstr:
         ps = pstr.split(',')
         for s in ps:
-            p = int(s)
+            t = s.strip()
+            if not t:
+                continue
+            p = int(t)
             try:
                 proc = get_p_by_pid(p)
                 logger.info("start to kill pid:%d", p)
@@ -485,6 +505,8 @@ def holdon_done():
             continue
 
 def main():
+    myapp = singleton.singleinstance("wssc.py")
+    myapp.run()
     global last_rec_time
     init()
     try:
@@ -494,30 +516,44 @@ def main():
             #程序启动时,上次任务强制设置为完成
             task_done()
             while True:
-                run_new_task()
-                while True:
-                    id, task_id, h,p_str,profile_id=is_task_running()
-                    if id is not None:
-                        elapsed = get_last_input()
-                        print 'no input elasped',elapsed
-                        if elapsed>g_rto*120000:
-                            close_kill_ff(h, p_str)
-                            set_task_status(id, 3)
-                            update_latest_profile_status(task_id,profile_id, 3)
-                            g_logtask.log(server_id, vm_id, task_id,status=3, end_time="CURRENT_TIMESTAMP")
-                            logger.info("long time no input, elasped:%d", elapsed)
-                        holdon_done()
-                        time.sleep(3)
-                    else:
-                        logger.info("no running task,turn to get new task")
-                        holdon_done()
-                        time.sleep(3)
-                        break
-                holdon_done()
-                time.sleep(5)
+                try:
+                    run_new_task()
+                    while True:
+                        id, task_id, h,p_str,profile_id=is_task_running()
+                        if id is not None:
+                            # elapsed = get_last_input()
+                            # # print 'no input elasped',elapsed
+                            # if elapsed>g_rto*120000:
+                            #     close_kill_ff(h, p_str)
+                            #     set_task_status(id, 3)
+                            #     update_latest_profile_status(task_id,profile_id, 3)
+                            #     g_logtask.log(server_id, vm_id, task_id,status=3, end_time="CURRENT_TIMESTAMP")
+                            #     logger.info("long time no input, elasped:%d", elapsed)
+                            holdon_done()
+                            time.sleep(3)
+                        else:
+                            logger.info("no running task,turn to get new task")
+                            holdon_done()
+                            time.sleep(3)
+                            break
+                    holdon_done()
+                    time.sleep(5)
+                except Exception ,e:
+                    print 'first while traceback.print_exc():'; traceback.print_exc()
+                    logger.error('exception on main_loop', exc_info = True)
+                    time.sleep(5)
+                    continue
 
-    except:
-        logger.error('exception on main_loop', exc_info = True)
+    except Exception ,e:
+        print 'traceback.print_exc():'; traceback.print_exc()
+        # logger.error('exception on main_loop', exc_info = True)
 
 if __name__ == "__main__":
-    main()
+    while True:
+        try:
+            main()
+            break
+        except Exception ,e:
+            print 'traceback.print_exc():'; traceback.print_exc()
+            logger.error('exception on main_loop', exc_info = True)
+            time.sleep(5)

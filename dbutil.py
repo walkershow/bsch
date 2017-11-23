@@ -72,7 +72,7 @@ def select_sql(sql):
 	if db_conn is None:
 		create_connection()
 	if db_conn is None:
-		# logger.error('db_conn is None')
+		logger.error('db_conn is None')
 					
 		return None 
 
@@ -99,7 +99,6 @@ def select_sqlwithdict(sql):
 		create_connection()
 	if db_conn is None:
 		logger.error('db_conn is None')
-		t_lock.release()			
 		return None 
 
 	try:

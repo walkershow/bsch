@@ -124,7 +124,8 @@ class TaskGroup(object):
             res_alltask = db.select_sql(sql)
             task_dict = {}
             for t in res_alltask:
-                task_dict[t[0]] = t[1]
+                if t[1] > 0:
+                    task_dict[t[0]] = t[1]
             # print "task_dict:",task_dict
             sql = sql_templ%(templ_id)
             # print "templ:",sql
@@ -139,14 +140,15 @@ class TaskGroup(object):
                 templ_sub_id = r[4]
                 detail_id = r[5]
                 cur_allot_num = int(round(total * p/100))
-                # print "cur_allot_num", cur_allot_num
+                print "cur_allot_num", cur_allot_num
                 for i in range(cur_allot_num):
                     if task_dict:
                         task_id = choice(task_dict.keys())
                         # print "task_id:",task_id
                         task_dict[task_id]= task_dict[task_id]- 1
                         # print task_dict
-                        if task_dict[task_id] <=0:
+                        cnt = task_dict[task_id]
+                        if cnt <=0:
                             task_dict.pop(task_id)
                         sql = '''insert into vm_task_allot_impl_tmp(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id,detail_id, update_time)
                             values(%d,%d,sec_to_time(%d),sec_to_time(%d),allot_times+1,%d, %d,%d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
@@ -246,10 +248,11 @@ class TaskGroup(object):
 
 
 if __name__ == '__main__':
-    dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm2"
+    dbutil.db_host = "192.168.1.53"
+    dbutil.db_name = "vm3"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
     t=TaskGroup(1,dbutil)
-    t.choose_vaild_task()
+    TaskGroup.reset_rantimes_allot_impl(dbutil)
+    # t.choose_vaild_task()
