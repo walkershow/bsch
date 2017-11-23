@@ -53,7 +53,7 @@ if check == 0 then
     return
 end
 
-sql_oprcode = string.format("select cur_task_id,task_group_id,oprcode from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=%d and status=1" , sid,gid,id) 
+sql_oprcode = string.format("select cur_task_id,task_group_id,oprcode,status from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=%d and status in(1,6) order by status limit 1" , sid,gid,id) 
 -- ngx.log(ngx.ERR, sql_oprcode)
 local  res, err, errno, sqlstate = db:query(sql_oprcode, 10)
 if not res then
@@ -72,7 +72,8 @@ end
 oprcode = res[1].oprcode
 task_id = res[1].cur_task_id
 task_group_id = res[1].task_group_id
-ngx.log(ngx.ERR, oprcode)
+status = res[1].status
+ngx.log(ngx.ERR, "oprcode:"..oprcode.."task_id:".. task_id.."status:",status)
 
 if id ~= task_id then
     ngx.log(ngx.ERR, "arg task id:%d ~= cur_task_id:%d", id,task_id)
