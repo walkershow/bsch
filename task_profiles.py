@@ -108,7 +108,7 @@ class TaskProfile(object):
 
     
     def set_cur_task_profile(self, vm_id, task_id, task_group_id):
-        self.delete_finish_task(vm_id)
+        # self.delete_finish_task(vm_id)
         task_type, terminal_type = self.get_task_type(task_id) 
         self.logger.info("task id:%d get task type task_type:%d, terminal_type:%d",task_id, task_type, terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ

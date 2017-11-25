@@ -92,18 +92,70 @@ class TaskAllot(object):
         pout_ids_set = self.pc.get_ran_out_parallel_task_set()
         print pout_ids_set
         return set(group_ids)|pout_ids_set
+
+    def vpn_update_time(self):
+        #sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
+        sql = "select update_time,ip from vpn_status where serverid=%d and vpnstatus=1 "%(self.server_id)
+        res = dbutil.select_sql(sql)
+        print "res", res
+        if res:
+            update_time = res[0][0]
+            ip = res[0][1]
+            print update_time
+            return  update_time,ip
+        return None,None
+
+    def vm_last_succ_time(self, task_group_id):
+        #sql = "select max(succ_time) from vm_cur_task where server_id=%d and vm_id=%d and status=2"%(g_serverid,vm_id)
+        sql = "select max(succ_time) from vm_cur_task where server_id=%d and task_group_id=%d and status>=2"%(
+            self.server_id,task_group_id)
+        res = dbutil.select_sql(sql)
+        if res:
+            return res[0][0]
+        return '1970-1-1 00:00:00'
+
+
+    def right_to_allot(self, task_group_id):
+        succ_time = self.vm_last_succ_time(task_group_id)
+        if succ_time is None:
+            succ_time ='1970-1-1 00:00:00'
+        redial_time,ip = self.vpn_update_time()
+        print "right to allot",succ_time, redial_time
+        logger.info("task_group_id:%d,last_succ_time:%s, redial_time:%s",task_group_id, succ_time, redial_time)
+        print("task_group_id:%d,last_succ_time:%s, redial_time:%s",task_group_id, succ_time, redial_time)
+        rtime ,stime = None,None
+        if redial_time:
+            rtime = time.strptime(str(redial_time),"%Y-%m-%d %H:%M:%S")
+            stime = time.strptime(str(succ_time),"%Y-%m-%d %H:%M:%S")
+
+            if stime< rtime:
+                return True
+            else:
+                logger.info("task_group_id:%d succ_time>=redial_time", task_group_id)
+                print("task_group_id:%d succ_time>=redial_time", task_group_id)
+        return False
     
-        
+    def get_valid_gid(self):
+        while self.selected_ids:
+            gid = self.selected_ids.pop()
+            if self.right_to_allot(gid):
+                logger.info("get valid gid:%d", gid)
+                print("get valid gid:%d", gid)
+                return gid
+        return 0
+            
+    
     def allot_by_priority(self, default_path):
         try:
             self.reset_when_newday()
             if self.selected_ids:
                 print self.selected_ids
                 print " i am in selelcted ids"
-                logger.info("====================")
-                logger.info("i am in selected ids")
-                logger.info("====================")
-                gid = self.selected_ids.pop()
+                # logger.info("====================")
+                # logger.info("i am in selected ids")
+                # logger.info("====================")
+                # gid = self.selected_ids.pop()
+                gid = self.get_valid_gid()
                 return self.handle_taskgroup(gid, default_path).id, gid
 
             sql = '''SELECT
@@ -138,19 +190,21 @@ class TaskAllot(object):
             rid_set = self.get_band_run_groupids()
             print "band run set", rid_set
             band_str = ",".join(str(s) for s in rid_set)
-            # logger.info("band task_group_id:%s", band_str)
+            logger.info("band task_group_id:%s", band_str)
                 
             self.selected_ids = list(set(ids) - rid_set)
             print self.selected_ids
+            gid = self.get_valid_gid()
 
             # logger.info("init task data:%d",ret)
-            if not self.selected_ids:
+            # if not self.selected_ids:
+            if gid == 0:
                 #不存在优先级高的任务组,执行随机分配
-                # logger.info("no priority task, get rand taskgroup")
+                logger.info("no priority task, get rand taskgroup")
                 print("no priority task, get rand taskgroup")
                 return self.allot_by_rand(default_path)
             else:
-                gid = self.selected_ids.pop()
+                # gid = self.selected_ids.pop()
                 return self.handle_taskgroup(gid, default_path).id,gid 
         except TaskError, t:
             raise TaskAllotError,"excute error:%s"%( t.message)
@@ -189,15 +243,15 @@ class TaskAllot(object):
             rid_set = self.get_band_run_groupids()
             print "band run set", rid_set
             band_str = ",".join(str(s) for s in rid_set)
-            # logger.info("band task_group_id:%s", band_str)
+            logger.info("band task_group_id:%s", band_str)
             self.selected_ids = list(set(ids) - rid_set)
             self.selected_ids.sort()
             print self.selected_ids
 
 
             task = None
-            task_group_id = 0 
-            if not self.selected_ids:
+            task_group_id = self.get_valid_gid()
+            if task_group_id == 0:
                 logger.info("get default taskgroup")
                 task = TaskGroup.getDefaultTask(self.db)
                 print task
@@ -207,7 +261,7 @@ class TaskAllot(object):
                     task.allot(default_path)
             else:
                 # task_group_id = random.choice(selected_ids)
-                task_group_id = self.selected_ids.pop()
+                # task_group_id = self.selected_ids.pop()
                 task = self.handle_taskgroup(task_group_id, default_path)
             return task.id, task_group_id
         except TaskError, t:

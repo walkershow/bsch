@@ -96,6 +96,7 @@ def poweroffVM(vmName):
             logger.info(
                 " ==============%s is not running,exit poweroffvm============",
                  vmName)
+            time.sleep(10)
             return 0
     logger.error(
         " ================poweroff %s failed after %d times * 45s======================",
@@ -281,5 +282,38 @@ def resumeVM(vmName):
     logger.error(
         "[%s] ================resume %s failed after %d times * 45s======================",
         tname, vmName, j)
+    return 1
+
+def set_network_type(vmName, ntype):
+    global g_vManager_path
+    cmd = "vboxmanage modifyvm " + vmName + " --nic1 " + ntype
+    j = 0
+    while j < 2:
+        if vmName in list_allrunningvms():
+            logger.info(
+                "==============%s is running,waiting poweroff============",
+                 vmName)
+            time.sleep(5)
+        else:
+            logger.info("cmd:%s",  cmd)
+            os.chdir(g_vManager_path)
+            status = os.system(cmd)
+            os.chdir(g_current_dir)
+            logger.info("cmd ret=%d", status)
+            if 0 != status:
+                logger.info(
+                    "set network type %s ,cmd %s failed and will sleep 5s to retry",
+                     vmName, cmd)
+                time.sleep(2)
+                j = j + 1
+                continue
+            j = j + 1
+            logger.info("set network type %s, %s retry %d times * 2s",  vmName, ntype,
+                        j)
+            return 0
+    logger.error(
+        "================set network type %s %s failed after %d times * 45s======================",
+         vmName, ntype, j)
+
     return 1
 

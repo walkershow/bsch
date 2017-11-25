@@ -323,7 +323,7 @@ def run_new_task():
         logger.info("===============get new task,id:%d,task_id:%d,profile_id:%d timeout:%d,oprcode:%d=============",
                     id, task_id, profile_id, timeout, oprcode)
         #关闭ff
-        # kill_unkown_ff() 
+        kill_unkown_ff() 
         last_rec_time = time.time()
         open_ff(id, task_id, profile_id)
         #查找ff
@@ -461,6 +461,12 @@ def close_kill_ff(h,pstr):
             except: 
                 logger.error("close and kill ff --- process id:%d no longer exist",p)
 
+def kill_zhixing():
+    cmd = '''taskkill /f /im "zhixing.exe" /T'''
+    # print cmd
+    ret = os.system(cmd)
+    logger.info("%s,ret:%d", cmd, ret)
+
 #待机时间是否已到
 def holdon_done():
     task_minutes = update_running_minutes()
@@ -482,6 +488,7 @@ def holdon_done():
         if status == 1:
             logger.info("checking timeout task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= timeout: 
+                kill_zhixing()
                 close_kill_ff(h, p_str)
                 #task timeout
                 status =6
@@ -493,6 +500,7 @@ def holdon_done():
         elif status == 2:
             logger.info("checking standby task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= standby_time :
+                kill_zhixing()
                 close_kill_ff(h, p_str)
                 #task finish
                 status =4

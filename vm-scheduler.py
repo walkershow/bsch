@@ -97,72 +97,6 @@ def vpn_status():
         return status, update_time
     return None,None
 
-def vpn_update_time():
-    #sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
-    sql = "select update_time,ip from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
-    res = dbutil.select_sql(sql)
-    print "res", res
-    if res:
-        update_time = res[0][0]
-        ip = res[0][1]
-        print update_time
-        return  update_time,ip
-    return None,None
-
-def vm_last_succ_time(task_group_id):
-    #sql = "select max(succ_time) from vm_cur_task where server_id=%d and vm_id=%d and status=2"%(g_serverid,vm_id)
-    sql = "select max(succ_time) from vm_cur_task where server_id=%d and task_group_id=%d and status>=2"%(
-        g_serverid,task_group_id)
-    res = dbutil.select_sql(sql)
-    if res:
-        return res[0][0]
-    return '1970-1-1 00:00:00'
-
-def ip_invalid_time():
-    sql = "select `value` from vm_sys_dict where `key`='ip_invalid_time'"
-    res = dbutil.select_sql(sql)
-    invalid_time = None
-    if not res:
-        invalid_time = 21600
-    else:
-        invalid_time = int(res[0][0])
-    return invalid_time
-
-
-def is_ip_valid(ip):
-    # invalid_time = ip_invalid_time()
-    # sql = "select id from used_ipinfo1 where ip='%s' and TIME_TO_SEC(timediff(now(),usetime))<%d"%(ip, invalid_time)
-    # res = g_vpn_db.select_sql(sql)
-    # logger.info(sql)
-    # print res
-    # if res:
-    #     return False
-    return True
-
-def right_to_allot(task_group_id):
-    succ_time = vm_last_succ_time(task_group_id)
-    redial_time,ip = vpn_update_time()
-    print "right to allot",succ_time, redial_time
-    logger.info("task_group_id:%d,last_succ_time:%s, redial_time:%s",task_group_id, succ_time, redial_time)
-    rtime ,stime = None,None
-    if redial_time:
-        rtime = time.strptime(str(redial_time),"%Y-%m-%d %H:%M:%S")
-        if not succ_time:
-            if is_ip_valid(ip):
-                return True
-            else:
-                logger.info("ip:%s is used", ip)
-        else:
-            stime = time.strptime(str(succ_time),"%Y-%m-%d %H:%M:%S")
-
-        if stime< rtime:
-            if is_ip_valid(ip):
-                return True
-            else:
-                logger.info("ip:%s is used", ip)
-        else:
-            logger.info("succ_time>=redial_time")
-    return False
 
 def notify_vpn_2():
     sql = "insert into vpn_change2(serverid,want_change2) value(%d,%d) on duplicate key update want_change2=%d,update_time=CURRENT_TIMESTAMP"%(g_serverid,2,2)
@@ -177,10 +111,81 @@ def is_vpn_2():
         return False
     return True
         
+def get_reset_network_interval():
+    sql = "select `value` from vm_sys_dict where `key`='reset_network_interval'"
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 15
+    return res[0][0]
+
+def get_zombie_vms():
+    vms = {}
+    interval = int(get_reset_network_interval())
+    # sql = "select id,vmname from vm_list where server_id=%d and enabled=0 and status=1 and "\
+    # " unix_timestamp(current_timestamp)-unix_timestamp(update_time)>%d"%(g_serverid, interval)
+    sql = "select vm_id,vm_name from vm_list where server_id=%d and enabled=0 and status=1 "\
+    "and UNIX_TIMESTAMP(current_timestamp)-UNIX_TIMESTAMP(update_time)>%d"%(g_serverid, interval)
+    # logger.info(sql)
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 
+    for r in res:
+        vm_id = r[0]
+        vmname = r[1]
+        vms[vm_id] = vmname
+        logger.info("get zombie vm:%s", vmname)
+    return vms
+        
+def update_vm_updatetime(status,vm_id):
+    sql = "update vm_list set status=%d,update_time=current_timestamp where server_id=%d and vm_id=%d"%(status,g_serverid, vm_id)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        raise Exception,"update_vm_time exception sql:%s,ret:%d"%(sql,ret)
+
+def reset_network():
+    # while True:
+    try:
+        zombie_vms = get_zombie_vms()
+        if zombie_vms: 
+            for vm_id,vmname in zombie_vms.items():
+                logger.info("============find zombie vm:%s==========", vmname)
+                
+                vm_utils.poweroffVM(vmname)
+                time.sleep(8)
+                vm_utils.set_network_type(vmname, 'null')
+                time.sleep(20)
+                vm_utils.set_network_type(vmname, 'nat')
+                time.sleep(10)
+                ret = vm_utils.startVM(vmname)
+                if ret == 0:
+                    logger.info("startvm %s succ",vmname)
+                    update_vm_updatetime(1,vm_id)
+                    log_reset_info(vm_id)
+                else:
+                    #失败也更新时间,防止
+                    update_vm_updatetime(0,vm_id)
+                    logger.info("startvm %s failed",vmname)
+                logger.info("============reset zombie vm ok:%s==========", vmname)
+    except:
+        logger.error(
+            '[reset_network] exception ', exc_info=True)
+        # time.sleep(60)
+
+def log_reset_info(vm_id):
+    sql = "insert into vm_reset_info(server_id,vm_id,reset_times,update_time,running_date) values(%d,%d,1,current_timestamp,current_date)"\
+    " on duplicate key update reset_times=reset_times+1, update_time=current_timestamp,running_date=current_date"
+    sql_tmp = sql%(g_serverid, vm_id )
+    logger.info(sql_tmp)
+    ret = dbutil.execute_sql(sql_tmp)
+    if ret<0:
+        raise Exception,"log_reset_info exception sql:%s,ret:%d"%(sql_tmp,ret)
+
+
 def pause_resume_vm():
     last_status = 1
     while True:
         try:
+            reset_network()
             status, update_time = vpn_status()
             # logger.info("status:%d,last_status:%d", status, last_status)
             #暂停
@@ -296,7 +301,7 @@ def main_loop():
             #     logger.info("exit the main loop!!!")
             #     os._exit(0)
             #     break
-            reset_vms_oneday()
+            # reset_vms_oneday()
             for i in range(0, len(vm_ids)):
                 sqltmp = sql %(g_serverid, vm_ids[i])
                 print sqltmp
@@ -312,25 +317,16 @@ def main_loop():
                         g_dsp_tmp = g_dsp
                         g_dsp_tmp = g_dsp_tmp % (vm_names[i])
                         task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
-                        # if right_to_allot(vm_ids[i]) or task_id==0 or g_pc.is_parallel(task_group_id):
-                        if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
-                            # if task_id == 0 :
-                            #     if not normal_task_canbe_run():
-                            #         logger.info("there's 0 task is pending or running")
-                            #         time.sleep(5)
-                            #         continue
-                            ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
-                            if not ret:
-                                logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
-                            else:
-                                g_taskallot.add_ran_time(task_id, task_group_id)
-                # else:
-                #     if len(res)>1: 
-                #         logger.error("vm:%d running task count %d>1 ,the data wrong ,please fix",vm_ids[i], len(res))
-
-
-
-            time.sleep(6)
+                        # if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
+                        ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
+                        if not ret:
+                            logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
+                        else:
+                            g_taskallot.add_ran_time(task_id, task_group_id)
+                        # else:
+                        #     ret = g_task_profile.set_cur_task_profile(vm_ids[i], 0, 0)
+                        
+            time.sleep(2)
 
         except:
             logger.error('exception on main_loop', exc_info=True)
@@ -489,6 +485,8 @@ def main():
         tname = "queue_thread"
         t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
         t2.start()
+        # t3 = threading.Thread(target=reset_network, name="reset_network_thread")
+        # t3.start()
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         logger.error("exit system,start to shut down all vm...")
