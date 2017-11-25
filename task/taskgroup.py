@@ -61,7 +61,6 @@ class TaskGroup(object):
     #deprecated 
     def __valid_time(self, start, end):
         sql = "select 1 from dual where time_to_sec(NOW()) between time_to_sec('%s') and time_to_sec('%s')"%(start, end)
-        print sql
         res = self.db.select_sql(sql)
         if res:
             return True
@@ -74,21 +73,22 @@ class TaskGroup(object):
         return False
 
     def add_ran_times(self, task_id):
-        sql ="update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d"%(self.id, task_id)
+        sql ="update vm_task_group set allot_times=allot_times+1 where id=%d and task_id=%d"%(self.id, task_id)
+        print sql
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
 
     @staticmethod        
     def add_default_ran_times(db):
-        sql ="update vm_task_group set ran_times=ran_times+1 where id=0"
+        sql ="update vm_task_group set allot_times=allot_times+1 where id=0"
         ret = db.execute_sql(sql)
         if ret<0:
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
 
     #如果刚好过那个时间点,次数可能会对不上
     def add_impl_ran_times(self, task_id):
-        sql ="update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d \
+        sql ="update vm_task_allot_impl set allot_times=allot_times+1 where id=%d and task_id=%d \
              and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)"%(self.id, task_id)
 
         ret = self.db.execute_sql(sql)
@@ -115,11 +115,17 @@ class TaskGroup(object):
         #sql_alltask = "select task_id, times from vm_task_group a,vm_task b where id=%d and a.task_id=b.id and b.status=1"
 
         res = db.select_sql(sql)
+        print res
         for r in res:
+            print r 
             id = r[0]
             total = r[1]
             templ_id = r[2]
             sql = sql_alltask%(id)
+            print "task_group_id:", id, "-----total:", total
+            if total == 0 or total is None:
+                print "continue to next "
+                continue
             # print "all_task:",sql
             res_alltask = db.select_sql(sql)
             task_dict = {}
@@ -141,6 +147,8 @@ class TaskGroup(object):
                 detail_id = r[5]
                 cur_allot_num = int(round(total * p/100))
                 print "cur_allot_num", cur_allot_num
+                if cur_allot_num == 0:
+                    continue
                 for i in range(cur_allot_num):
                     if task_dict:
                         task_id = choice(task_dict.keys())
@@ -217,7 +225,7 @@ class TaskGroup(object):
     def reset_rantimes_today(db):
         '''更新当天任务'''
 
-        sql ="update vm_task_group set ran_times_lastday = ran_times ,ran_times=0, \
+        sql ="update vm_task_group set ran_times_lastday = ran_times ,ran_times=0,allot_times=0, \
             times=FLOOR(times_start_range + (RAND() * (times_end_range-times_start_range))) where templ_id>0" 
         ret = db.execute_sql(sql)
         if ret<0:
@@ -227,7 +235,7 @@ class TaskGroup(object):
     def reset_rantimes_alltask(db):
         '''更新所有任务包括跨天'''
 
-        sql ="update vm_task_group set ran_times_lastday = ran_times ,ran_times=0, \
+        sql ="update vm_task_group set ran_times_lastday = ran_times ,ran_times=0,allot_times=0, \
             times=FLOOR(times_start_range + (RAND() * (times_end_range-times_start_range))) " 
         ret = db.execute_sql(sql)
         if ret<0:
@@ -253,6 +261,9 @@ if __name__ == '__main__':
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    t=TaskGroup(1,dbutil)
-    TaskGroup.reset_rantimes_allot_impl(dbutil)
+    t=TaskGroup(111,dbutil)
+    # TaskGroup.reset_rantimes_allot_impl(dbutil)
+    t.add_default_ran_times(dbutil)
+    t.add_impl_ran_times(111)
+    t.add_ran_times(111)
     # t.choose_vaild_task()

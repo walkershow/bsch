@@ -29,6 +29,7 @@ end
 local a_times = tonumber(args.a_times) or 0
 local b_times = tonumber(args.b_times) or 0
 local c_times = tonumber(args.c_times) or 0
+
 function stat()
     sql = string.format([[insert into ad_click_statistics(id,a_times,b_times,c_times,click_date,update_time) 
         values(%d,a_times+%d,b_times+%d,c_times+%d,CURRENT_DATE,CURRENT_TIMESTAMP)
@@ -46,6 +47,31 @@ function stat()
     ngx.eof()
 end
 
+function add_ran_time(task_group_id, task_id)
+    sql =string.format("update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d", task_group_id, task_id)
+    ngx.log(ngx.ERR, sql)
+    local  res, err, errno, sqlstate = db:query(sql, 10)
+    if not res then
+        ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
+        db:set_keepalive(10000, 100)
+        ngx.say("failed")
+        return
+    end
+end
+    
+function add_impl_ran_times(task_group_id, task_id)
+    sql =string.format([[update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d 
+         and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)]],task_group_id, task_id)
+    ngx.log(ngx.ERR, sql)
+    local  res, err, errno, sqlstate = db:query(sql, 10)
+    if not res then
+        ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
+        db:set_keepalive(10000, 100)
+        ngx.say("failed")
+        return
+    end
+end
+
 local check= tonumber(args.check) or 1
 
 if check == 0 then
@@ -53,7 +79,7 @@ if check == 0 then
     return
 end
 
-sql_oprcode = string.format("select cur_task_id,task_group_id,oprcode,status from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=%d and status in(1,6) order by status limit 1" , sid,gid,id) 
+sql_oprcode = string.format("select cur_task_id,task_group_id,oprcode,status from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=%d and status in(1,6) order by status ,oprcode desc limit 1" , sid,gid,id) 
 -- ngx.log(ngx.ERR, sql_oprcode)
 local  res, err, errno, sqlstate = db:query(sql_oprcode, 10)
 if not res then
@@ -81,23 +107,6 @@ if id ~= task_id then
 end
 
 stat()
--- local a_times = tonumber(args.a_times) or 0
--- local b_times = tonumber(args.b_times) or 0
--- local c_times = tonumber(args.c_times) or 0
--- sql = string.format([[insert into ad_click_statistics(id,a_times,b_times,c_times,click_date,update_time) 
---     values(%d,a_times+%d,b_times+%d,c_times+%d,CURRENT_DATE,CURRENT_TIMESTAMP)
---     on duplicate key update a_times=a_times+%d,b_times=b_times+%d,c_times=c_times+%d, update_time=CURRENT_TIMESTAMP]], 
---     id,a_times,b_times,c_times,a_times,b_times,c_times)
--- ngx.log(ngx.INFO, sql)
--- local  res, err, errno, sqlstate = db:query(sql, 10)
--- if not res then
---     ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
---     db:set_keepalive(10000, 100)
---     ngx.say("failed")
---     return
--- end
--- ngx.say("succ")
--- ngx.eof()
 
 local up_col = nil
 if a_times ~=0 then
@@ -146,7 +155,7 @@ if not res then
 end
 
     
-if c_time ~=0 then
+if c_times ~=0 then
     sql = string.format("update vm_task_group set task_latest_succ_time= CURRENT_TIMESTAMP where id=%d and task_id=%d", task_group_id,task_id)
     ngx.log(ngx.ERR, sql)
     local  res, err, errno, sqlstate = db:query(sql, 10)
@@ -156,6 +165,8 @@ if c_time ~=0 then
         ngx.say("failed")
         return
     end
+    add_ran_time(task_group_id ,task_id)
+    add_impl_ran_times(task_group_id, task_id) 
 end
 
 
