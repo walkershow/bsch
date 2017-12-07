@@ -103,6 +103,12 @@ def notify_vpn_2():
     ret = dbutil.execute_sql(sql)
     if ret<0:
         raise Exception,"change2 to 2 failed"
+        
+def notify_vpn_1():
+    sql = "insert into vpn_change2(serverid,want_change2) value(%d,%d) on duplicate key update want_change2=%d,update_time=CURRENT_TIMESTAMP"%(g_serverid,1,1)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        raise Exception,"change1 to 1 failed"
 
 def is_vpn_2():
     sql = "select 1 from vpn_change2 where want_change2=2 and serverid=%d"%(g_serverid)
@@ -111,8 +117,22 @@ def is_vpn_2():
         return False
     return True
         
+def is_vpn_1():
+    sql = "select 1 from vpn_change2 where want_change2=1 and serverid=%d"%(g_serverid)
+    res = dbutil.select_sql(sql)
+    if res is None or len(res)<1:
+        return False
+    return True
+
 def get_reset_network_interval():
     sql = "select `value` from vm_sys_dict where `key`='reset_network_interval'"
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 15
+    return res[0][0]
+
+def get_restart_vm_interval():
+    sql = "select `value` from vm_sys_dict where `key`='restart_vm_interval'"
     res = dbutil.select_sql(sql)
     if not res:
         return 15
@@ -135,7 +155,81 @@ def get_zombie_vms():
         vms[vm_id] = vmname
         logger.info("get zombie vm:%s", vmname)
     return vms
+
+def get_zombie_vms3():
+    vms = {}
+    sql = "select id,vm_id from vm_cur_task where server_id=%d and status=-2"%(g_serverid)
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 
+    for r in res:
+        vm_id = r[1]
+        vms[vm_id] = r[0]
+        logger.info("get zombie vm:%d", vm_id)
+    return vms
+
+def get_max_update_time():
+    sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a,vm_list b  where  a.vm_id=b.id and b.enabled =0 and a.server_id=%d  group by  a.vm_id"%(g_serverid)
+    res = dbutil.select_sql(sql)
+    vms_time = {}
+    if not res:
+        return vms_time
+    for r in res:
+        vms_time[r[1]] = {"id":r[0],"ut":r[2]}
+    return vms_time
+
+def vpn_update_time():
+    sql = "select UNIX_TIMESTAMP(update_time) from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
+    res = dbutil.select_sql(sql)
+    print "res", res
+    if res:
+        update_time = res[0][0]
+        print update_time
+        return  update_time
+    return None
+#长时间未曾更新任务时间        
+def get_zombie_vms2():
+    vm_ids = {}
+    interval = int(get_restart_vm_interval())
+    vms_time = get_max_update_time()
+    redial_time = vpn_update_time()
+    if not redial_time:
+        return vm_ids
+    for vid, item in vms_time.items():
+        id = item['id'] 
+        time = item['ut']
+        if time >= redial_time:
+            continue
+        else:
+            print "vm_id:",vid,"========stime:",time, "rtime:", redial_time
+            if redial_time -time >interval:
+                # vm_ids.append(vid)
+                vm_ids[vid]=id
+                logger.info("vm_id:%d,id:%d redial_time-stime>300", vid,id)
+    return vm_ids
         
+def reset_zombie_vm():
+    vm_set = get_zombie_vms2()
+    if vm_set:
+        vms.resume_allvm(g_serverid) 
+    for vid,id in vm_set.items():
+        vmname = "w"+str(vid)
+        vm_utils.resetVM(vmname)
+        vm_updatetime(id)
+
+#状态8处理完成后更新为9
+def vm_update_status(rid):
+    sql = "update vm_cur_task set status=8,update_time=current_timestamp where id=%d"%(rid)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        raise Exception,"update_vm_cur_task_status exception sql:%s,ret:%d"%(sql,ret)
+
+def vm_updatetime(id):
+    sql = "update vm_cur_task set update_time=current_timestamp where id=%d"%(id)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        raise Exception,"update_vm_cur_task_time exception sql:%s,ret:%d"%(sql,ret)
+
 def update_vm_updatetime(status,vm_id):
     sql = "update vm_list set status=%d,update_time=current_timestamp where server_id=%d and vm_id=%d"%(status,g_serverid, vm_id)
     ret = dbutil.execute_sql(sql)
@@ -153,9 +247,9 @@ def reset_network():
                 vm_utils.poweroffVM(vmname)
                 time.sleep(8)
                 vm_utils.set_network_type(vmname, 'null')
-                time.sleep(20)
-                vm_utils.set_network_type(vmname, 'nat')
                 time.sleep(10)
+                vm_utils.set_network_type(vmname, 'nat')
+                time.sleep(5)
                 ret = vm_utils.startVM(vmname)
                 if ret == 0:
                     logger.info("startvm %s succ",vmname)
@@ -169,6 +263,35 @@ def reset_network():
     except:
         logger.error(
             '[reset_network] exception ', exc_info=True)
+        # time.sleep(60)
+        
+def reset_network2():
+    # while True:
+    try:
+        zombie_vms = get_zombie_vms3()
+        if zombie_vms: 
+            for vm_id,rid in zombie_vms.items():
+                vmname = "w" + str(vm_id)
+                logger.info("============find zombie2 vm_id:%d==========", vm_id)
+                vm_utils.poweroffVM(vmname)
+                time.sleep(8)
+                vm_utils.set_network_type(vmname, 'null')
+                time.sleep(10)
+                vm_utils.set_network_type(vmname, 'nat')
+                time.sleep(5)
+                ret = vm_utils.startVM(vmname)
+                if ret == 0:
+                    logger.info("startvm %s succ",vmname)
+                    vm_update_status(rid)
+                    log_reset_info(vm_id)
+                else:
+                    #失败也更新时间,防止
+                    update_vm_updatetime(0,vm_id)
+                    logger.info("startvm %s failed",vmname)
+                logger.info("============reset zombie2 vm ok:%s==========", vmname)
+    except:
+        logger.error(
+            '[reset_network2] exception ', exc_info=True)
         # time.sleep(60)
 
 def log_reset_info(vm_id):
@@ -185,23 +308,36 @@ def pause_resume_vm():
     last_status = 1
     while True:
         try:
+            reset_zombie_vm()
+            reset_network2()
             reset_network()
             status, update_time = vpn_status()
+            
             # logger.info("status:%d,last_status:%d", status, last_status)
+            while True:
             #暂停
-            if status == 2 and last_status == 1:
-                vms.pause_allvm(g_serverid)
-                notify_vpn_2()
-            #恢复
-            elif last_status ==2 and status ==1:
-                vms.resume_allvm(g_serverid) 
-                g_pc.reset_allocated_num()
-            elif last_status == 2 and status == 2:
-                if not is_vpn_2():
-                    logger.info("status and last_status is 2 but it'nt notify vpn chagne 2")
-                    last_status = 1
-                    continue
-            last_status = status
+                if status == 2 and last_status == 1:
+                    vms.pause_allvm(g_serverid)
+                    last_status = status
+                    notify_vpn_2()
+                #恢复
+                elif last_status ==2 and status ==1:
+                    vms.resume_allvm(g_serverid) 
+                    last_status = status
+                    notify_vpn_1()
+                    g_pc.reset_allocated_num()
+                elif last_status == 2 and status == 2:
+                    if not is_vpn_2():
+                        logger.info("status and last_status is 2 but it'nt notify vpn chagne 2")
+                        last_status = 1
+                        continue
+                elif last_status == 1 and status == 1:
+                    if not is_vpn_1():
+                        logger.info("status and last_status is 1 but it'nt notify vpn chagne 1")
+                        last_status = 2
+                        continue
+                break
+            # last_status = status
             time.sleep(1)
         except:
             logger.error(
@@ -290,7 +426,7 @@ def main_loop():
 
     #获取运行状态,请求运行的vm 
     sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
-    " a.server_id=%d and a.vm_id=%d and a.status in(1,-1) "
+    " a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1]

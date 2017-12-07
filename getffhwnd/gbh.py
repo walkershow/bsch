@@ -142,12 +142,13 @@ def find_ff_hwnd2(hwnds, ds=90):
         time.sleep(3)
     return 0
 
-def close_ff_win(hwnd):
+def close_ff_win(hwnd, b_sr):
     try:
         # if win32gui.IsWindow(hwnd):
         # redirect(hwnd)
-        refresh(hwnd)
-        time.sleep(20)
+        if b_sr == 1:
+            refresh(hwnd)
+            time.sleep(20)
 
         logger.info("postmessage to close win:%d",hwnd)
         win32gui.PostMessage(hwnd, win32con.WM_CLOSE, 0, 0)
@@ -157,7 +158,7 @@ def close_ff_win(hwnd):
     except:
         print "close ff exp",hwnd
 
-def close_ff(hwnd, hwnds):
+def close_ff(hwnd, hwnds,b_sr=1):
     # if not win32gui.IsWindow(hwnd):
     #     logger.info("close ff the hwnd is not windows:%d", hwnd)
     #     return False
@@ -166,7 +167,7 @@ def close_ff(hwnd, hwnds):
     logger.info("close ff win:%d",hwnd)
     # redirect(hwnd)
     # time.sleep(3)
-    close_ff_win(hwnd)
+    close_ff_win(hwnd, b_sr)
     # if i>4:
     #     logger.info("retry to close ff time is out,return failed:%d", hwnd)
     #     return False
@@ -238,22 +239,25 @@ def redirect(hwnd):
 
 
 if __name__ == '__main__':
+    wins = getwin(u"<错误>")
+    # wins = getwin("<错误>".decode("utf8").encode("gbk"))
+    print wins
     # hwnd = find_ff_hwnd([])
     # print hwnd
     # print type(hwnd)
     # close_ff(int(hwnd))
-    import sys
-    hwnd = sys.argv[1]
-    print int(hwnd)
-    h = find_ff_hwnd([], 5)
-    print h
-    wins = getwin(titlename)
-    print wins
-    print    wins[0][0]
-    h = wins[0][0]
-    # mouseclick(h)
-    # mouseclick(h)
-    redirect(h)
+    # import sys
+    # hwnd = sys.argv[1]
+    # print int(hwnd)
+    # h = find_ff_hwnd([], 5)
+    # print h
+    # wins = getwin(titlename)
+    # print wins
+    # print    wins[0][0]
+    # h = wins[0][0]
+    # # mouseclick(h)
+    # # mouseclick(h)
+    # redirect(h)
     # refresh(h)
     # activeAddrBar(h)
     # close_ff_win(int(hwnd))

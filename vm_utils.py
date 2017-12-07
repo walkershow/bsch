@@ -290,6 +290,7 @@ def set_network_type(vmName, ntype):
     j = 0
     while j < 2:
         if vmName in list_allrunningvms():
+            poweroffVM(vmName)
             logger.info(
                 "==============%s is running,waiting poweroff============",
                  vmName)

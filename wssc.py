@@ -23,7 +23,7 @@ import dbutil
 import subprocess
 import ctypes
 import getffhwnd.gbh
-from getffhwnd.gbh import find_ff_hwnd, close_ff, get_pid,get_p_by_pid,close_ff_win
+from getffhwnd.gbh import find_ff_hwnd, close_ff, get_pid,get_p_by_pid,close_ff_win,getwin
 import urllib
 import requests
 from logbytask.logtask import LogTask,LogTaskError
@@ -135,22 +135,26 @@ def runcmd():
 
 def new_task_come():
     sql = "select a.id,a.cur_task_id,b.timeout,a.oprcode,a.ff_hwnd,a.cur_profile_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
-    logger.debug(sql)
+    # logger.debug(sql)
+    logger.info(sql)
     res =dbutil.select_sql(sql)
     if not res:
         return None,None,None,None,None,None
     return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5]
 
 def is_task_running():
-    sql = "select id,cur_task_id,ff_hwnd,ff_pids,cur_profile_id from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
-    logger.debug(sql)
+    sql = "select id,cur_task_id,ff_hwnd,ff_pids,cur_profile_id from vm_cur_task "\
+    "where server_id=%d and vm_id=%d and status=1 and start_time>current_date order by start_time desc limit 1"%(int(server_id), int(vm_id))
+    # logger.debug(sql)
+    logger.info(sql)
     res = dbutil.select_sql(sql)
     if not res:
         return None,None,None,None,None
     return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4]
 
 def get_running_task_id():
-    sql = "select id,cur_task_id,ff_hwnd,oprcode,cur_profile_id from vm_cur_task where server_id=%d and vm_id=%d and status=1"%(int(server_id), int(vm_id))
+    sql = "select id,cur_task_id,ff_hwnd,ff_pids,cur_profile_id from vm_cur_task "\
+    "where server_id=%d and vm_id=%d and status=1 and start_time>current_date order by start_time desc limit 1"%(int(server_id), int(vm_id))
     res = dbutil.select_sql(sql)
     if not res:
         return None,None,None,None,None
@@ -241,12 +245,14 @@ def get_task_timeout(task_id):
     return None,None
 
 def get_ran_minutes():
-    sql = "select id,cur_task_id,ran_minutes,ff_hwnd,ff_pids,cur_profile_id,status from vm_cur_task where server_id=%d and vm_id=%d and status in (1,2)"%(server_id, vm_id)
+    # sql = "select id,cur_task_id,ran_minutes,ff_hwnd,ff_pids,cur_profile_id,status,should_refresh from vm_cur_task  where server_id=%d and vm_id=%d and status in (1,2)"%(server_id, vm_id)
+    sql = "select a.id,a.cur_task_id,a.ran_minutes,a.ff_hwnd,a.ff_pids,a.cur_profile_id,a.status,b.should_refresh from vm_cur_task a,vm_task b  where a.cur_task_id=b.id and a.server_id=%d and a.vm_id=%d and a.status in (1,2)"%(server_id, vm_id)
     res = dbutil.select_sql(sql)
     task_min = {}
     if res:
         for r in res:
-            task_min[r[0]] = {'task_id':r[1],'mins':r[2],'hwnd': r[3], 'pid_str':r[4],'profile_id':r[5],'status':r[6]}
+            task_min[r[0]] = {'task_id':r[1],'mins':r[2],'hwnd': r[3], 
+                            'pid_str':r[4],'profile_id':r[5],'status':r[6],'should_refresh':r[7]}
     print "task_min:", task_min
     return task_min
 
@@ -365,13 +371,14 @@ def run_new_task():
         g_logtask.log(server_id, vm_id, task_id, status=status, start_time="CURRENT_TIMESTAMP")
         update_startup_time(id)
         # break
-    time.sleep(5)
+    # time.sleep(5)
 
 def task_done():
     id, task_id, hwnd, oprcode,profile_id = get_running_task_id()
     if id is None:
         return
     logger.info("==========the id:%d, task:%d is done==========",id, task_id)
+    kill_zhixing()
     set_task_status(id,2)
     update_latest_profile_status(task_id,profile_id, 2)
     g_logtask.task_done2(oprcode)
@@ -406,7 +413,7 @@ def open_ff(id ,task_id, profile_id):
             cmd = "start "+ profile
             logger.info("%s", cmd)
             # print cmd
-            os.system("d:\\y.exe")
+            # os.system("d:\\y.exe")
             os.system(cmd)
         except:
             logger.error("http request error")
@@ -434,10 +441,10 @@ def close_kill_ff2(h,p):
     except:
         logger.error("close and kill ff --- process id:%d no longer exist",p)
 
-def close_kill_ff(h,pstr):
+def close_kill_ff(h,pstr,b_sr):
     hwnds,pids = get_ff_hwnds_pids_on_vm()
     if h:
-        close_ff(int(h), hwnds)
+        close_ff(int(h), hwnds, b_sr)
         time.sleep(5)
     if pstr:
         ps = pstr.split(',')
@@ -480,35 +487,37 @@ def holdon_done():
         h = v['hwnd']
         p_str = v['pid_str']
         status = v['status']
+        should_refresh = v['should_refresh']
         timeout,standby_time = get_task_timeout(task_id)
-        print "timeout:", timeout,"standby:",standby_time
+        print "timeout:", timeout,"standby:",standby_time,"b_sr:",should_refresh
         logger.info("timeout:%d,standby:%d", timeout, standby_time)
-        logger.info("task_id:%d, status:%d,ran_min:%d", task_id, status,m)
+        logger.info("task_id:%d, status:%d,ran_min:%d,b_sr:%d", task_id, status,m, should_refresh)
         # if m>= timeout:
         if status == 1:
             logger.info("checking timeout task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= timeout: 
                 kill_zhixing()
-                close_kill_ff(h, p_str)
+                close_kill_ff(h, p_str, should_refresh)
                 #task timeout
                 status =6
                 set_task_status(t,status)
                 update_latest_profile_status(task_id,profile_id, status)
                 g_logtask.log(server_id, vm_id, task_id, status=status, end_time="CURRENT_TIMESTAMP")
                 logger.info("id:%d task:%d is timeout,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
-                time.sleep(3)
+                # time.sleep(3)
         elif status == 2:
             logger.info("checking standby task:%d,m:%d,standby:%d",task_id, m, standby_time)
             if m>= standby_time :
-                kill_zhixing()
-                close_kill_ff(h, p_str)
+                # kill_zhixing()
+                #在任务task_done是杀掉zhixing,不能在待机时
+                
                 #task finish
                 status =4
                 set_task_status(t,status)
                 update_latest_profile_status(task_id,profile_id, status)
                 g_logtask.log(server_id, vm_id, task_id, status=status, end_time="CURRENT_TIMESTAMP")
                 logger.info("id:%d task:%d is standby,ran_minutes:%d,timeout:%d", t, task_id, m, timeout)
-                time.sleep(3)
+                # time.sleep(3)
         else:
             continue
 
@@ -537,12 +546,28 @@ def main():
                             #     update_latest_profile_status(task_id,profile_id, 3)
                             #     g_logtask.log(server_id, vm_id, task_id,status=3, end_time="CURRENT_TIMESTAMP")
                             #     logger.info("long time no input, elasped:%d", elapsed)
+                            wins = getwin(u"<错误>")
+                            if wins:
+                                set_task_status(id, 7)
+                                kill_zhixing()
+                                close_kill_ff(h, p_str, 0)
+                                update_latest_profile_status(task_id,profile_id, 7)
+                                g_logtask.log(server_id, vm_id, task_id,status=7, end_time="CURRENT_TIMESTAMP")
+                                logger.info("zhixing is error, close and get new task")
+                            
+                            wins2 = getwin(u"脚本执行")
+                            if wins2:
+                                set_task_status(id, -2)
+                                kill_zhixing()
+                                update_latest_profile_status(task_id,profile_id, -2)
+                                g_logtask.log(server_id, vm_id, task_id,status=-2, end_time="CURRENT_TIMESTAMP")
+                                logger.info("zhixing execute  error, notify vm-schedule to reset net work")
+
+
                             holdon_done()
                             time.sleep(3)
                         else:
                             logger.info("no running task,turn to get new task")
-                            holdon_done()
-                            time.sleep(3)
                             break
                     holdon_done()
                     time.sleep(5)
