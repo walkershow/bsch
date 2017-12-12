@@ -124,6 +124,13 @@ def is_vpn_1():
         return False
     return True
 
+def get_running_task_num():
+    sql = "select `value` from vm_sys_dict where `key`='running_task_num'"
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 4 
+    return int(res[0][0])
+
 def get_reset_network_interval():
     sql = "select `value` from vm_sys_dict where `key`='reset_network_interval'"
     res = dbutil.select_sql(sql)
@@ -308,9 +315,9 @@ def pause_resume_vm():
     last_status = 1
     while True:
         try:
-            reset_zombie_vm()
-            reset_network2()
-            reset_network()
+            # reset_zombie_vm()
+            # reset_network2()
+            # reset_network()
             status, update_time = vpn_status()
             
             # logger.info("status:%d,last_status:%d", status, last_status)
@@ -426,13 +433,14 @@ def main_loop():
 
     #获取运行状态,请求运行的vm 
     sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
-    " a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
+    " a.server_id=%d and a.vm_id=%d and a.status = -1 "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1]
     # vm_names = ['w1']
     while True:
         try:
+            g_pb = get_running_task_num()
             # if shutdown_by_flag():
             #     logger.info("exit the main loop!!!")
             #     os._exit(0)

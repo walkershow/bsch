@@ -47,8 +47,18 @@ class TaskProfile(object):
     #need task_type,no!!!!
     def reuse_profiles(self, vm_id, task_type):
         # return
-        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status>2 "\
+        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status>3 "\
         "and TIMESTAMPDIFF(DAY, start_time, now())>=re_enable_days "
+        sql = sql%(self.server_id, vm_id)
+        self.logger.info(sql)
+        ret= self.db.execute_sql(sql)
+        if ret<0:
+            raise Exception,"%s exec failed ret:%d"%(sql, ret)
+        self.reuse_profiles2(vm_id, task_type)
+
+    def reuse_profiles2(self, vm_id, task_type):
+        # return
+        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status in(3,5,7,8)"
         sql = sql%(self.server_id, vm_id)
         self.logger.info(sql)
         ret= self.db.execute_sql(sql)
@@ -132,7 +142,8 @@ class TaskProfile(object):
         self.logger.info("allot profile info:server_id:%d,vm_id:%d,task_id:%d,task_type:%d,profile_id:%d",
                     self.server_id,vm_id, task_id, task_type, profile_id)
         # print self.server_id,vm_id, task_id, task_type, profile_id
-        self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1)
+        if task_id != 0:
+            self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1)
         self.log_task.log(self.server_id, vm_id, task_id, status=-1, start_time="CURRENT_TIMESTAMP")
         return True
 
