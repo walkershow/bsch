@@ -52,7 +52,7 @@ class Task(object):
             filename = self.script_file.decode("utf-8").encode("gbk")
             #logger.info("allot script:%s", filename)
             print "allot script:", filename
-            shutil.copy(filename, cover_script_file)
+            # shutil.copy(filename, cover_script_file)
         except (OSError,IOError), e:
             # logger.error('exception', exc_info = True)
             raise TaskError,"cannot copy %s to %s,error:%s"\
@@ -67,9 +67,9 @@ class Task(object):
                         %(e.message)
         print "allot str", str
         print cover_script_file
-        fp = open(cover_script_file, "w+")
-        fp.write(str)
-        fp.close()
+        # fp = open(cover_script_file, "w+")
+        # fp.write(str)
+        # fp.close()
             
 
 if __name__ == '__main__':
