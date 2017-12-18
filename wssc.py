@@ -24,12 +24,14 @@ import urllib
 import requests
 import traceback
 import singleton
+import psutil
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
 vm_id = 0
 server_id = 0
 script_path = None
+task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
 
 class LASTINPUTINFO(ctypes.Structure):
     """docstring for LASTINPUTINFO"""
@@ -108,8 +110,11 @@ def init():
     return True
 
 
-def runcmd(task_id, id):
-    script_name = str(task_id) + ".py"
+def runcmd(task_id, id, task_type):
+    if task_type >0:
+        script_name = task_script_names[task_type-1]
+    else:
+        script_name = str(task_id) + ".py"
     script = os.path.join(script_path, script_name)
     # script = get_task_scriptfile(task_id)
     print "script:", script
@@ -122,13 +127,13 @@ def runcmd(task_id, id):
     return True
 
 def new_task_come():
-    sql = "select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
+    sql = "select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.task_type,b.timeout,b.standby_time from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
     # logger.debug(sql)
     logger.info(sql)
     res =dbutil.select_sql(sql)
     if not res:
-        return None,None,None,None
-    return res[0][0],res[0][1],res[0][2],res[0][3]
+        return None,None,None,None,None,None,None
+    return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5],res[0][6]
 
 def set_task_status(status,id):
     sql = 'update vm_cur_task set status=%d where id=%d'%(status, id)
@@ -164,6 +169,43 @@ def get_task_scriptfile(task_id):
     script = res[0][0]
     script = script.decode("utf-8").encode("gbk")
     return script
+
+def get_task_type(task_id):
+    sql = "select task_type from vm_task where id=%d"%(task_id)
+    logger.info(sql)
+    res =dbutil.select_sql(sql)
+    if not res:
+        return None
+    task_type = res[0][0]
+    return task_type
+
+def del_timeout_task():
+    sql = "select id,cur_task_id from vm_cur_task where status in (1,2) and server_id=%d and vm_id=%d"%(int(server_id), int(vm_id))
+    logger.info(sql)
+    res =dbutil.select_sql(sql)
+    if res:
+        print res
+        for r in res:
+            id = r[0]
+            task_id = r[1]
+            task_type = get_task_type(task_id)
+            script_name = str(task_id)+".py"
+            if task_type >0:
+                script_name = task_script_names[task_type-1]
+            cmd_findstr = script_name + " -t %d"%(id)
+            for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+                if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+                    proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+                    # print proc.info['cmdline']
+                    if proc.info["cmdline"] is not None and proc.info["cmdline"].find(cmd_findstr) != -1:
+                        print cmd_findstr, "is exist"
+                        print "id", id ,"===task_id",task_id, " is running"
+                        return
+                        
+            print cmd_findstr, "is not exist"
+            print "task is not running"
+            set_task_status(7,id)
+
 def main():
     myapp = singleton.singleinstance("wssc.py")
     myapp.run()
@@ -172,15 +214,16 @@ def main():
         while True:
             try:
                 while True:
-                    id, task_id, oprcode, profile_id = new_task_come()
+                    id, task_id, oprcode, profile_id, task_type,timeout,standby = new_task_come()
                     if id is not None:
                         print "get task", task_id
-                        ret = runcmd(task_id, id)
+                        ret = runcmd(task_id, id, task_type)
                         if ret:
                             set_task_status(1,id)
                         else:
                             update_latest_profile_status(task_id, profile_id, 3)                            
                             set_task_status(3,id)
+                    del_timeout_task()
 
 
                     time.sleep(3)

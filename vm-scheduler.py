@@ -432,44 +432,49 @@ def main_loop():
     # reset()
 
     #获取运行状态,请求运行的vm 
-    sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
-    " a.server_id=%d and a.vm_id=%d and a.status = -1 "
+    sql = "select a.vm_id from vm_cur_task a where "\
+    " a.server_id=%d and a.status in (-1,1) "%(g_serverid)
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
+    print vm_ids
     # vm_ids = [1]
     # vm_names = ['w1']
     while True:
         try:
             g_pb = get_running_task_num()
-            # if shutdown_by_flag():
+            # if shutdown_by_flag()
             #     logger.info("exit the main loop!!!")
             #     os._exit(0)
             #     break
             # reset_vms_oneday()
             for i in range(0, len(vm_ids)):
-                sqltmp = sql %(g_serverid, vm_ids[i])
+                while True:
+                    print vm_ids[i],sql
+                    res = dbutil.select_sql(sql)
+                    if not res :
+                        break
+                    time.sleep(3)
+                    
+                sqltmp = sql_count%(g_serverid, vm_ids[i])
                 print sqltmp
                 res = dbutil.select_sql(sqltmp)
-                if not res :
-                    sqltmp = sql_count%(g_serverid, vm_ids[i])
-                    res = dbutil.select_sql(sqltmp)
-                    count = 0
-                    if res:
-                        count = res[0][0]
-                    logger.info("running task vm:%d,count:%d", vm_ids[i], count)
-                    if count<g_pb:
-                        g_dsp_tmp = g_dsp
-                        g_dsp_tmp = g_dsp_tmp % (vm_names[i])
-                        task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
-                        # if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
-                        ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
-                        if not ret:
-                            logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
-                        else:
-                            g_taskallot.add_ran_time(task_id, task_group_id)
-                        # else:
-                        #     ret = g_task_profile.set_cur_task_profile(vm_ids[i], 0, 0)
-                        
+                count = 0
+                if res:
+                    count = res[0][0]
+                logger.info("running task vm:%d,count:%d", vm_ids[i], count)
+                if count<1:
+                    g_dsp_tmp = g_dsp
+                    g_dsp_tmp = g_dsp_tmp % (vm_names[i])
+                    task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
+                    if task_id == 0 or task_id=='0':
+                        print "don't run 0 task"
+                        time.sleep(2)
+                        continue
+                    # if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
+                    ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
+                    if not ret:
+                        logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
+                            
             time.sleep(2)
 
         except:
