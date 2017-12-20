@@ -202,7 +202,7 @@ def runcmd(task_id, id, task_type):
         return False
     os.chdir(script_path)
     commands = ["python", script,"-t", str(id)]
-    process = subprocess.Popen(commands)
+    process = subprocess.Popen(commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
     return True
 
 def new_task_come():
