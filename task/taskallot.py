@@ -138,10 +138,11 @@ class TaskAllot(object):
     def get_valid_gid(self):
         while self.selected_ids:
             gid = self.selected_ids.pop()
-            if self.right_to_allot(gid):
-                logger.info("get valid gid:%d", gid)
-                print("get valid gid:%d", gid)
-                return gid
+            return gid
+            # if self.right_to_allot(gid):
+            #     logger.info("get valid gid:%d", gid)
+            #     print("get valid gid:%d", gid)
+            #     return gid
         return 0
             
     

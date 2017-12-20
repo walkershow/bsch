@@ -109,6 +109,85 @@ def init():
     dbutil.logger = logger
     return True
 
+def get_max_update_time():
+    # sql = "select max(UNIX_TIMESTAMP(a.update_time))  from vm_cur_task a where a.server_id=%d and vm_id=%d group by server_id, vm_id"%(server_id,vm_id)
+    sql = "select id,cur_task_id,UNIX_TIMESTAMP(a.update_time) from vm_cur_task a where a.server_id=%d and status in (1,2)"%(server_id)
+    # sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a where a.server_id=%d "%(server_id)
+    res = dbutil.select_sql(sql)
+    vms_time = {}
+    if not res:
+        return vms_time
+    for r in res:
+        vms_time[r[1]] = {"id":r[0],"ut":r[2]}
+    return vms_time
+
+def vpn_update_time():
+    sql = "select UNIX_TIMESTAMP(update_time) from vpn_status where serverid=%d and vpnstatus=1 "%(server_id)
+    res = dbutil.select_sql(sql)
+    # print "res", res
+    if res:
+        update_time = res[0][0]
+        # print update_time
+        return  update_time
+    return None
+
+def is_vpn_dialup_3min():
+    '''已拨号成功3分钟'''
+    sql = "select 1 from vpn_status where serverid=%d and vpnstatus=1 and UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(update_time)>180"%(server_id)
+    res = dbutil.select_sql(sql)
+    if res:
+        print "dial up 3 mins!!!"
+        return True
+    else:
+        return False
+
+def kill_proc_by_pid(proc):
+    try:
+        logger.info("start to kill pid:%d", p)
+        if proc:
+            if proc.pid == 0:
+                logger.info("the ppid is 0,ignore it")
+                return
+            proc.kill() 
+            logger.info("killed pid:%d", proc.pid)
+        else:
+            logger.info("the process:%d was not exists ", proc.pid)
+    except:
+        logger.error("kill proc:%d except",proc.pid)
+
+#长时间未曾更新任务时间        
+def kill_zombie_proc(interval=140):
+    vm_ids = {}
+    if not is_vpn_dialup_3min():
+        return
+    vms_time = get_max_update_time()
+    print vms_time
+    redial_time = vpn_update_time()
+    print redial_time
+    if not redial_time:
+        return vm_ids
+    for tid, item in vms_time.items():
+        id = item['id'] 
+        time = item['ut']
+        if not time:
+            continue
+        if time >= redial_time:
+            continue
+        else:
+            if redial_time -time >interval:
+                logger.info("===========task proc:%d is not acting======", tid)
+                logger.info("task_id:%d,id:%d redial_time-stime>140", tid,id)
+                set_task_status(8,id)
+                script_name = get_scirpt_name(tid)
+                cmd_findstr = script_name + " -t %d"%(id)
+                proc = find_proc_by_cmdline(cmd_findstr)
+                kill_proc_by_pid(proc)
+                clean_all_chrome()
+                notify_vpn_redial()
+                logger.info("===========task proc:%d clean done======", tid)
+                
+    return vm_ids
+
 
 def runcmd(task_id, id, task_type):
     if task_type >0:
@@ -136,7 +215,7 @@ def new_task_come():
     return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5],res[0][6]
 
 def set_task_status(status,id):
-    sql = 'update vm_cur_task set status=%d where id=%d'%(status, id)
+    sql = 'update vm_cur_task set status=%d,update_time=current_timestamp where id=%d'%(status, id)
     ret = dbutil.execute_sql(sql)
     if ret<0:
         raise Exception,"%s excute error;ret:%d"%(sql, ret)
@@ -151,6 +230,7 @@ def del_unuse_latest_profile_status( task_id, profile_id):
     if ret<0:
         logger.error("sql:%s, ret:%d", sql, ret)
 
+
 def update_latest_profile_status( task_id, profile_id,status):
     sql = "update vm_task_profile_latest set status=%d where server_id=%d and vm_id=%d and task_id=%d and profile_id=%d"%(
         status, server_id, vm_id,task_id, profile_id
@@ -159,6 +239,7 @@ def update_latest_profile_status( task_id, profile_id,status):
     ret = dbutil.execute_sql(sql)
     if ret<0:
         logger.error("sql:%s, ret:%d", sql, ret)
+
 
 def get_task_scriptfile(task_id):
     sql = "select script_file from vm_task where id=%d"%(task_id)
@@ -170,6 +251,7 @@ def get_task_scriptfile(task_id):
     script = script.decode("utf-8").encode("gbk")
     return script
 
+
 def get_task_type(task_id):
     sql = "select task_type from vm_task where id=%d"%(task_id)
     logger.info(sql)
@@ -179,32 +261,71 @@ def get_task_type(task_id):
     task_type = res[0][0]
     return task_type
 
+def clean_all_chrome():
+    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+            # print proc.info['cmdline']
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find("chrome.exe") != -1:
+                proc.kill()
+
+def find_proc_by_cmdline(cmdline):
+    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+            # print proc.info['cmdline']
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find(cmdline) != -1:
+                print cmdline, "is exist"
+                return proc
+    return None
+
+def notify_vpn_redial():
+    sql = 'update vm_isdial_baidu set isdial=1,update_time=current_timestamp where serverid=%d'%(server_id)
+    logger.info(sql)
+    ret = dbutil.execute_sql(sql)
+    if ret<0:
+        logger.error("sql:%s, ret:%d", sql, ret)
+
+def get_task_id_by_id(id):
+    sql = "select * task_id"
+    
+def get_scirpt_name(task_id):
+    task_type = get_task_type(task_id)
+    script_name = str(task_id)+".py"
+    if task_type >0:
+        script_name = task_script_names[task_type-1]
+    return script_name
+
 def del_timeout_task():
-    sql = "select id,cur_task_id from vm_cur_task where status in (1,2) and server_id=%d and vm_id=%d"%(int(server_id), int(vm_id))
+    sql = "select id,cur_task_id from vm_cur_task where status in (1,2) and server_id=%d and vm_id=%d"%(server_id, vm_id)
     logger.info(sql)
     res =dbutil.select_sql(sql)
+    bflag =False
     if res:
         print res
         for r in res:
             id = r[0]
             task_id = r[1]
-            task_type = get_task_type(task_id)
-            script_name = str(task_id)+".py"
-            if task_type >0:
-                script_name = task_script_names[task_type-1]
+            script_name = get_scirpt_name(task_id)
             cmd_findstr = script_name + " -t %d"%(id)
-            for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-                if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
-                    proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-                    # print proc.info['cmdline']
-                    if proc.info["cmdline"] is not None and proc.info["cmdline"].find(cmd_findstr) != -1:
-                        print cmd_findstr, "is exist"
-                        print "id", id ,"===task_id",task_id, " is running"
-                        return
-                        
-            print cmd_findstr, "is not exist"
-            print "task is not running"
-            set_task_status(7,id)
+            proc = find_proc_by_cmdline(cmd_findstr)
+            if not proc:
+                print cmd_findstr, "is not exist"
+                print "task is not running"
+                set_task_status(7,id)
+                bflag = True
+        if bflag:
+            notify_vpn_redial()
+
+            # for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+            #     if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            #         proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+            #         # print proc.info['cmdline']
+            #         if proc.info["cmdline"] is not None and proc.info["cmdline"].find(cmd_findstr) != -1:
+            #             print cmd_findstr, "is exist"
+            #             print "id", id ,"===task_id",task_id, " is running"
+            #             return
+            # set_task_status(7,id)
 
 def main():
     myapp = singleton.singleinstance("wssc.py")
@@ -224,8 +345,7 @@ def main():
                             update_latest_profile_status(task_id, profile_id, 3)                            
                             set_task_status(3,id)
                     del_timeout_task()
-
-
+                    kill_zombie_proc()
                     time.sleep(3)
                         
             except Exception ,e:
