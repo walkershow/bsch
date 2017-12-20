@@ -81,14 +81,14 @@ class TaskGroup(object):
 
     @staticmethod        
     def add_default_ran_times(db):
-        sql ="update vm_task_group set allot_times=allot_times+1 where id=0"
+        sql ="update vm_task_group set ran_times=ran_times+1 where id=0"
         ret = db.execute_sql(sql)
         if ret<0:
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
 
     #如果刚好过那个时间点,次数可能会对不上
     def add_impl_ran_times(self, task_id):
-        sql ="update vm_task_allot_impl set allot_times=allot_times+1 where id=%d and task_id=%d \
+        sql ="update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d \
              and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)"%(self.id, task_id)
 
         ret = self.db.execute_sql(sql)

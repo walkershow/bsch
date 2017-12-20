@@ -125,7 +125,7 @@ def pause_allvm(server_id):
             continue
         
 def resume_allvm(server_id):
-    sql_all = "select vm_id, vm_name from vm_list where server_id=" + str(
+    sql_all = "select vm_id, vm_name from vm_list where enabled=0 and server_id=" + str(
         server_id)
     res = dbutil.select_sqlwithdict(sql_all)
     if res is None or len(res) <= 0:

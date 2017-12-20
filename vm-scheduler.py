@@ -140,6 +140,8 @@ def get_restart_vm_interval():
 
 def get_zombie_vms():
     vms = {}
+    if not is_vpn_dialup_3min():
+        return vms
     interval = int(get_reset_network_interval())
     # sql = "select id,vmname from vm_list where server_id=%d and enabled=0 and status=1 and "\
     # " unix_timestamp(current_timestamp)-unix_timestamp(update_time)>%d"%(g_serverid, interval)
@@ -181,15 +183,26 @@ def get_max_update_time():
 def vpn_update_time():
     sql = "select UNIX_TIMESTAMP(update_time) from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
     res = dbutil.select_sql(sql)
-    print "res", res
     if res:
         update_time = res[0][0]
-        print update_time
         return  update_time
     return None
+
+def is_vpn_dialup_3min():
+    '''已拨号成功3分钟'''
+    sql = "select 1 from vpn_status where serverid=%d and vpnstatus=1 and UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(update_time)>180"%(g_serverid)
+    res = dbutil.select_sql(sql)
+    if res:
+        print "dial up 3 mins!!!"
+        return True
+    else:
+        return False
+
 #长时间未曾更新任务时间        
 def get_zombie_vms2():
     vm_ids = {}
+    if not is_vpn_dialup_3min():
+        return vm_ids 
     interval = int(get_restart_vm_interval())
     vms_time = get_max_update_time()
     redial_time = vpn_update_time()
