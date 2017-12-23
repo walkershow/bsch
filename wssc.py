@@ -474,6 +474,14 @@ def kill_zhixing():
     ret = os.system(cmd)
     logger.info("%s,ret:%d", cmd, ret)
 
+def kill_all_ff():
+    proc_name = ['firefox.exe','crashreporter.exe','plugin-container.exe','WerFault.exe']
+    for n in proc_name:
+        cmd = '''taskkill /f /im "%s" /T'''%(n)
+        # print cmd
+        ret = os.system(cmd)
+        logger.info("%s,ret:%d", cmd, ret)
+
 #待机时间是否已到
 def holdon_done():
     task_minutes = update_running_minutes()
@@ -562,6 +570,18 @@ def main():
                                 update_latest_profile_status(task_id,profile_id, -2)
                                 g_logtask.log(server_id, vm_id, task_id,status=-2, end_time="CURRENT_TIMESTAMP")
                                 logger.info("zhixing execute  error, notify vm-schedule to reset net work")
+
+                            wins3 = getwin(u"崩溃报告器")
+                            wins4 = getwin(u"Plugin Container for Firefox")
+                            wins5 = getwin(u"关闭")
+                            if wins3 or wins4 or wins5:
+                                logger.info("==========start clean the win environment========")
+                                kill_zhixing()
+                                kill_all_ff()
+                                set_task_status(id, 9)
+                                update_latest_profile_status(task_id,profile_id, 9)
+                                g_logtask.log(server_id, vm_id, task_id,status=9, end_time="CURRENT_TIMESTAMP")
+                                logger.info("==========clean the win environment============")
 
 
                             holdon_done()

@@ -1,0 +1,1 @@
+shortcut.vbs 1 1
