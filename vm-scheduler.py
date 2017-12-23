@@ -438,8 +438,9 @@ def main_loop():
     # reset()
 
     #获取运行状态,请求运行的vm 
-    sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
-    " a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
+    sql = "select a.vm_id from vm_cur_task a where a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
+    # sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
+    # " a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1]
