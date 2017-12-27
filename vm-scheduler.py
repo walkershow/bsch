@@ -211,6 +211,8 @@ def get_zombie_vms2():
     for vid, item in vms_time.items():
         id = item['id'] 
         time = item['ut']
+        if time is None:
+            continue
         if time >= redial_time:
             continue
         else:
@@ -439,8 +441,6 @@ def main_loop():
 
     #获取运行状态,请求运行的vm 
     sql = "select a.vm_id from vm_cur_task a where a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
-    # sql = "select a.vm_id,b.vm_name from vm_cur_task a,vm_list b where a.vm_id=b.vm_id and"\
-    # " a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1]
@@ -467,14 +467,9 @@ def main_loop():
                         g_dsp_tmp = g_dsp
                         g_dsp_tmp = g_dsp_tmp % (vm_names[i])
                         task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
-                        # if right_to_allot(task_group_id) or task_id==0 or g_pc.is_parallel(task_group_id):
                         ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
                         if not ret:
                             logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
-                        else:
-                            g_taskallot.add_ran_time(task_id, task_group_id)
-                        # else:
-                        #     ret = g_task_profile.set_cur_task_profile(vm_ids[i], 0, 0)
                         
             time.sleep(2)
 

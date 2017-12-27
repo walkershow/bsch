@@ -122,8 +122,8 @@ class TaskProfile(object):
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id, task_id)
         self.pc.add_allocated_num(task_group_id)
 
-        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes)"\
-        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0) "%(
+        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes,update_time)"\
+        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,CURRENT_TIMESTAMP) "%(
             self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)

@@ -287,9 +287,10 @@ class TaskAllot(object):
         tg = TaskGroup(task_group_id, self.db)
         if id==0:
             TaskGroup.add_default_ran_times(self.db)
-        else:
-            tg.add_ran_times(task_id)
-            tg.add_impl_ran_times(task_id)
+        #成功时才技术,放在ad_stat接口了
+        # else:
+        #     tg.add_ran_times(task_id)
+        #     tg.add_impl_ran_times(task_id)
 
 
 if __name__ == '__main__':
