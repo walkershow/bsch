@@ -283,11 +283,12 @@ class TaskAllot(object):
     
     def add_ran_time(self, task_id,task_group_id):
         ''' 分配成功后有可用profile 时计数
-            运行次数计算放到ad_stat进行
         '''
         tg = TaskGroup(task_group_id, self.db)
         if id==0:
             TaskGroup.add_default_ran_times(self.db)
+        else:
+            tg.add_ran_times(task_id)
 
 
 if __name__ == '__main__':

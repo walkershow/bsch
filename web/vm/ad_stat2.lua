@@ -48,7 +48,7 @@ function stat()
 end
 
 function add_ran_time(task_group_id, task_id)
-    sql =string.format("update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d", task_group_id, task_id)
+    sql =string.format("update vm_task_group set ran_times=ran_times+1,task_latest_succ_time= CURRENT_TIMESTAMP where id=%d and task_id=%d", task_group_id, task_id)
     ngx.log(ngx.ERR, sql)
     local  res, err, errno, sqlstate = db:query(sql, 10)
     if not res then
@@ -156,15 +156,6 @@ end
 
     
 if c_times ~=0 then
-    sql = string.format("update vm_task_group set task_latest_succ_time= CURRENT_TIMESTAMP where id=%d and task_id=%d", task_group_id,task_id)
-    ngx.log(ngx.ERR, sql)
-    local  res, err, errno, sqlstate = db:query(sql, 10)
-    if not res then
-        ngx.log(ngx.ERR,"the sql:"..sql.." executed failed; bad result: ".. err.. ": ".. errno.. ": ".. sqlstate.. ".")
-        db:set_keepalive(10000, 100)
-        ngx.say("failed")
-        return
-    end
     add_ran_time(task_group_id ,task_id)
     add_impl_ran_times(task_group_id, task_id) 
 end

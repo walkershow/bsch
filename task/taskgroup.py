@@ -73,7 +73,7 @@ class TaskGroup(object):
         return False
 
     def add_ran_times(self, task_id):
-        sql ="update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d"%(self.id, task_id)
+        sql ="update vm_task_group set allot_times=allot_times+1 where id=%d and task_id=%d"%(self.id, task_id)
         print sql
         ret = self.db.execute_sql(sql)
         if ret<0:
