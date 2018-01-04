@@ -1,2 +1,3 @@
 #python pyc file
 *.pyc
+task/*.pyc
