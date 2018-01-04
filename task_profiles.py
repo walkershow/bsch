@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 # @CreateTime: Sep 13, 2017 3:47 PM
 # @Author: coldplay
 # @Contact: coldplay
@@ -5,7 +7,6 @@
 # @Last Modified Time: Sep 13, 2017 3:47 PM
 # @Description: Modify Here, Please
 
-# -*- coding: utf-8 -*-
 import dbutil
 import random
 from logbytask.logtask import LogTask,LogTaskError
@@ -47,37 +48,39 @@ class TaskProfile(object):
     #need task_type,no!!!!
     def reuse_profiles(self, vm_id, task_type):
         # return
-        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status>2 "\
+        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status in(-2,-1,1,2,4,6) "\
         "and TIMESTAMPDIFF(DAY, start_time, now())>=re_enable_days "
         sql = sql%(self.server_id, vm_id)
         self.logger.info(sql)
         ret= self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)
+        self.reuse_profiles2(vm_id, task_type)
 
-    def delete_finish_task(self, vm_id):
-        sql = "delete from vm_cur_task where server_id=%d and vm_id=%d and status in(3,4,5,6)"%(self.server_id, vm_id)
-        self.logger.info(sql)
-        ret= self.db.execute_sql(sql)
-        if ret<0:
-            raise Exception,"%s exec failed ret:%d"%(sql, ret)
-        # self.delete_normal_task(vm_id)
-
-    def delete_normal_task(self, vm_id):
-        sql = "delete from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=0 and status=2"%(self.server_id, vm_id)
+    def reuse_profiles2(self, vm_id, task_type):
+        # return
+        sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status in(3,5,7,8,9)"
+        sql = sql%(self.server_id, vm_id)
         self.logger.info(sql)
         ret= self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)
 
-    def get_used_profiles(self, vm_id, task_type):
+    def get_used_profiles(self, vm_id, task_type, is_default=False):
         profiles = []
+        sql = ""
         self.reuse_profiles(vm_id, task_type)
         # print self.server_id, vm_id, task_type
         # sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d"\
         # " and task_type = %d "%(self.server_id, vm_id, task_type)
-        sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d"\
-         %(self.server_id, vm_id)
+        if not is_default:
+            sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d and task_id!=0 "\
+            %(self.server_id, vm_id)
+        #常规任务
+        else:
+            sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d"\
+            " and (task_id=0 or status in(-1,1,2))"\
+            %(self.server_id, vm_id)
         res = self.db.select_sql(sql)
         for r in res:
             id = r[0]
@@ -95,9 +98,9 @@ class TaskProfile(object):
             profile_ids.append(r[0])
         return profile_ids
 
-    def get_task_usable_profiles(self, vm_id, task_type, terminal_type):
+    def get_task_usable_profiles(self, vm_id, task_type, terminal_type,is_default=False):
         all_profiles = self.get_vm_profiles(vm_id, terminal_type)
-        used_profiles = self.get_used_profiles(vm_id, task_type)
+        used_profiles = self.get_used_profiles(vm_id, task_type, is_default)
         # print all_profiles, used_profiles
         usable_profiles = list(set(all_profiles).difference(set(used_profiles)))
         # print usable_profiles
@@ -109,10 +112,13 @@ class TaskProfile(object):
     
     def set_cur_task_profile(self, vm_id, task_id, task_group_id):
         # self.delete_finish_task(vm_id)
+        is_default = False
+        if task_group_id == 0:
+            is_default = True
         task_type, terminal_type = self.get_task_type(task_id) 
         self.logger.info("task id:%d get task type task_type:%d, terminal_type:%d",task_id, task_type, terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ
-        profile_id = self.get_task_usable_profiles(vm_id, task_type, terminal_type)
+        profile_id = self.get_task_usable_profiles(vm_id, task_type, terminal_type, is_default)
         # print profile_id
         if not profile_id:
             self.logger.info("task id:%d no profile to use!!!", task_id)
@@ -122,8 +128,8 @@ class TaskProfile(object):
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id, task_id)
         self.pc.add_allocated_num(task_group_id)
 
-        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes,update_time)"\
-        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,CURRENT_TIMESTAMP) "%(
+        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes)"\
+        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0) "%(
             self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)
@@ -132,7 +138,8 @@ class TaskProfile(object):
         self.logger.info("allot profile info:server_id:%d,vm_id:%d,task_id:%d,task_type:%d,profile_id:%d",
                     self.server_id,vm_id, task_id, task_type, profile_id)
         # print self.server_id,vm_id, task_id, task_type, profile_id
-        self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1)
+        if task_id != 0:
+            self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1)
         self.log_task.log(self.server_id, vm_id, task_id, status=-1, start_time="CURRENT_TIMESTAMP")
         return True
 

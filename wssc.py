@@ -31,7 +31,8 @@ kernel32 = ctypes.windll.kernel32
 vm_id = 0
 server_id = 0
 script_path = None
-task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
+# task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
+task_script_names = ['bdads.py', 'sgads.py', '360ads.py']
 
 class LASTINPUTINFO(ctypes.Structure):
     """docstring for LASTINPUTINFO"""

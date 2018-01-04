@@ -36,7 +36,6 @@ from logbytask.logtask import LogTask,LogTaskError
 global g_vManager_path
 global g_current_dir
 global g_reset
-global g_cur_running_count
 global g_origin_limit
 from dbutil import DBUtil
 g_serverid = 0
@@ -138,6 +137,7 @@ def get_restart_vm_interval():
         return 15
     return res[0][0]
 
+#程序卡死,没更新时间
 def get_zombie_vms():
     vms = {}
     if not is_vpn_dialup_3min():
@@ -158,17 +158,6 @@ def get_zombie_vms():
         logger.info("get zombie vm:%s", vmname)
     return vms
 
-def get_zombie_vms3():
-    vms = {}
-    sql = "select id,vm_id from vm_cur_task where server_id=%d and status=-2"%(g_serverid)
-    res = dbutil.select_sql(sql)
-    if not res:
-        return 
-    for r in res:
-        vm_id = r[1]
-        vms[vm_id] = r[0]
-        logger.info("get zombie vm:%d", vm_id)
-    return vms
 
 def get_max_update_time():
     sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a,vm_list b  where  a.vm_id=b.id and b.enabled =0 and a.server_id=%d  group by  a.vm_id"%(g_serverid)
@@ -180,6 +169,7 @@ def get_max_update_time():
         vms_time[r[1]] = {"id":r[0],"ut":r[2]}
     return vms_time
 
+
 def vpn_update_time():
     sql = "select UNIX_TIMESTAMP(update_time) from vpn_status where serverid=%d and vpnstatus=1 "%(g_serverid)
     res = dbutil.select_sql(sql)
@@ -187,6 +177,7 @@ def vpn_update_time():
         update_time = res[0][0]
         return  update_time
     return None
+
 
 def is_vpn_dialup_3min():
     '''已拨号成功3分钟'''
@@ -222,22 +213,19 @@ def get_zombie_vms2():
                 vm_ids[vid]=id
                 logger.info("vm_id:%d,id:%d redial_time-stime>300", vid,id)
     return vm_ids
-        
+
+#发现程序卡死,重启        
 def reset_zombie_vm():
     vm_set = get_zombie_vms2()
     if vm_set:
         vms.resume_allvm(g_serverid) 
     for vid,id in vm_set.items():
+        logger.info("============find zombie vm:%s==========", vmname)
         vmname = "w"+str(vid)
         vm_utils.resetVM(vmname)
         vm_updatetime(id)
+        logger.info("============reset zombie vm ok:%s==========", vmname)
 
-#状态8处理完成后更新为9
-def vm_update_status(rid):
-    sql = "update vm_cur_task set status=8,update_time=current_timestamp where id=%d"%(rid)
-    ret = dbutil.execute_sql(sql)
-    if ret<0:
-        raise Exception,"update_vm_cur_task_status exception sql:%s,ret:%d"%(sql,ret)
 
 def vm_updatetime(id):
     sql = "update vm_cur_task set update_time=current_timestamp where id=%d"%(id)
@@ -251,13 +239,14 @@ def update_vm_updatetime(status,vm_id):
     if ret<0:
         raise Exception,"update_vm_time exception sql:%s,ret:%d"%(sql,ret)
 
+#网络异常,关机重置网络
 def reset_network():
     # while True:
     try:
         zombie_vms = get_zombie_vms()
         if zombie_vms: 
             for vm_id,vmname in zombie_vms.items():
-                logger.info("============find zombie vm:%s==========", vmname)
+                logger.info("============find network corrupt zombie vm:%s==========", vmname)
                 
                 vm_utils.poweroffVM(vmname)
                 time.sleep(8)
@@ -274,40 +263,12 @@ def reset_network():
                     #失败也更新时间,防止
                     update_vm_updatetime(0,vm_id)
                     logger.info("startvm %s failed",vmname)
-                logger.info("============reset zombie vm ok:%s==========", vmname)
+                logger.info("============reset network corrupt zombie vm ok:%s==========", vmname)
     except:
         logger.error(
             '[reset_network] exception ', exc_info=True)
         # time.sleep(60)
         
-def reset_network2():
-    # while True:
-    try:
-        zombie_vms = get_zombie_vms3()
-        if zombie_vms: 
-            for vm_id,rid in zombie_vms.items():
-                vmname = "w" + str(vm_id)
-                logger.info("============find zombie2 vm_id:%d==========", vm_id)
-                vm_utils.poweroffVM(vmname)
-                time.sleep(8)
-                vm_utils.set_network_type(vmname, 'null')
-                time.sleep(10)
-                vm_utils.set_network_type(vmname, 'nat')
-                time.sleep(5)
-                ret = vm_utils.startVM(vmname)
-                if ret == 0:
-                    logger.info("startvm %s succ",vmname)
-                    vm_update_status(rid)
-                    log_reset_info(vm_id)
-                else:
-                    #失败也更新时间,防止
-                    update_vm_updatetime(0,vm_id)
-                    logger.info("startvm %s failed",vmname)
-                logger.info("============reset zombie2 vm ok:%s==========", vmname)
-    except:
-        logger.error(
-            '[reset_network2] exception ', exc_info=True)
-        # time.sleep(60)
 
 def log_reset_info(vm_id):
     sql = "insert into vm_reset_info(server_id,vm_id,reset_times,update_time,running_date) values(%d,%d,1,current_timestamp,current_date)"\
@@ -324,7 +285,6 @@ def pause_resume_vm():
     while True:
         try:
             reset_zombie_vm()
-            reset_network2()
             reset_network()
             status, update_time = vpn_status()
             
@@ -359,8 +319,6 @@ def pause_resume_vm():
                 '[pasue_reusme_vm] exception on main_loop', exc_info=True)
     logger.info("[%s] exit pause_resume_vm", tname)
         
-
-
 
 def get_shutdown_time():
     """获取关机时间点 
@@ -426,14 +384,6 @@ def shutdown_by_flag():
         logger.info("sql:%s======>> exceute ret:%d", sql, ret)
     logger.info("=======shutdown all vm finished============")
     return True
-
-def normal_task_canbe_run():
-    sql = "select 1 from vm_cur_task where server_id=%d and vm_id=%d and cur_task_id=0 and status in (-1,1,2)"
-    res = dbutil.select_sql(sql)
-    # print "is_exp_vm:", res
-    if not res:
-        return True
-    return False 
 
 
 def main_loop():
@@ -560,9 +510,8 @@ def init():
         default="120",
         help="reset waiting time,default is 120s")
     (options, args) = parser.parse_args()
-    global g_current_dir, g_reset, g_cur_running_count
+    global g_current_dir, g_reset 
     global g_serverid, g_rto, g_dsp,g_reset_waittime ,g_pb
-    g_cur_running_count = 0
     g_dsp = options.dsp
     g_serverid = int(options.serverid)
     if g_serverid == 0:

@@ -6,6 +6,7 @@
 @Last Modified time: 2017-05-13 11:39:55 
 '''
 
+from __future__ import division
 import sys
 import datetime
 import os
@@ -129,15 +130,17 @@ class TaskGroup(object):
             # print "all_task:",sql
             res_alltask = db.select_sql(sql)
             task_dict = {}
+            task_templ_dict = {}
             for t in res_alltask:
                 if t[1] > 0:
                     task_dict[t[0]] = t[1]
-            # print "task_dict:",task_dict
+                    task_templ_dict[t[0]] = 0
+            print "task_dict:",task_dict
             sql = sql_templ%(templ_id)
-            # print "templ:",sql
+            print "templ:",sql
             res = db.select_sql(sql)
             for r in res:
-                # print "templ row:", r
+                print "templ row:", r
                 p = r[0]
                 start_time = int(r[1])
                 end_time = int(r[2])
@@ -147,24 +150,43 @@ class TaskGroup(object):
                 detail_id = r[5]
                 cur_allot_num = int(round(total * p/100))
                 print "cur_allot_num", cur_allot_num
+                
                 if cur_allot_num == 0:
                     continue
-                for i in range(cur_allot_num):
-                    if task_dict:
-                        task_id = choice(task_dict.keys())
-                        # print "task_id:",task_id
+                allot_total = cur_allot_num
+                # for i in range(cur_allot_num):
+                while True:
+                    if allot_total <= 0:
+                        break
+                    if not task_dict:
+                        break
+                    for t, v in task_dict.items():
+                        task_id = t
+                    # task_id = choice(task_dict.keys())
                         task_dict[task_id]= task_dict[task_id]- 1
+                        task_templ_dict[task_id]= task_templ_dict[task_id] + 1
+                        allot_total = allot_total - 1
                         # print task_dict
                         cnt = task_dict[task_id]
                         if cnt <=0:
                             task_dict.pop(task_id)
-                        sql = '''insert into vm_task_allot_impl_tmp(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id,detail_id, update_time)
-                            values(%d,%d,sec_to_time(%d),sec_to_time(%d),allot_times+1,%d, %d,%d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
-                        sql_impl = sql%(id,task_id,start_time,end_time, templ_id, templ_sub_id,detail_id)
-                        # print sql_impl
-                        ret = db.execute_sql(sql_impl)
-                        if ret<0:
-                            raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
+                        if allot_total <= 0:
+                            break
+                print task_templ_dict
+                for t,n in task_templ_dict.items():
+                    allot_times = n
+                    if allot_times == 0:
+                        continue
+                    task_id = t
+                    sql = '''insert into vm_task_allot_impl_tmp(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id,detail_id, update_time)
+                        values(%d,%d,sec_to_time(%d),sec_to_time(%d),%d,%d, %d,%d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
+                    sql_impl = sql%(id,task_id,start_time,end_time, allot_times, templ_id, templ_sub_id,detail_id)
+                    # print sql_impl
+                    task_templ_dict[task_id] = 0
+                    ret = db.execute_sql(sql_impl)
+                    if ret<0:
+                        raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
+            print "=========task_group_id:", id, "-----total:", total," finish!!!!"
     
     @staticmethod
     def impl_task_templ_detail(db, task_group_id=None):
@@ -192,24 +214,25 @@ class TaskGroup(object):
             if not res:
                 print sql, " empty"
                 continue
-            num = 1
-            while True:
-                if num>allot_times:
-                    break
-                for td in res:
-                    start = td[1]
-                    end = td[2]
-                    sql = '''insert into vm_task_allot_impl(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id, update_time)
-                        values(%d,%d,date_add(sec_to_time(%d), interval %d minute),date_add(sec_to_time(%d), interval %d minute),
-                        allot_times+1,%d, %d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
-                    sql_impl = sql%(id,task_id,start_time, start, start_time, end, templ_id, templ_sub_id)
-                    # print sql_impl
-                    ret = db.execute_sql(sql_impl)
-                    if ret<0:
-                        raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
-                    num = num +1
-                    if num>allot_times:
-                        break
+            pos = len(res) + 1
+            for td in res:
+                start = td[1]
+                end = td[2]
+                pos = pos - 1
+                one_times = int(round(allot_times/pos))
+                if one_times<=0:
+                    continue
+
+                sql = '''insert into vm_task_allot_impl(id,task_id,start_time,end_time,allot_times,templ_id,templ_sub_id, update_time)
+                    values(%d,%d,date_add(sec_to_time(%d), interval %d minute),date_add(sec_to_time(%d), interval %d minute),
+                    %d,%d, %d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 ''' 
+                sql_impl = sql%(id,task_id,start_time, start, start_time, end, one_times, templ_id, templ_sub_id)
+                # print sql_impl
+                ret = db.execute_sql(sql_impl)
+                if ret<0:
+                    raise TaskGroupError,"%s excute error;ret:%d"%(sql_impl, ret)
+                allot_times = allot_times - one_times
+
     @staticmethod
     def reset_rantimes_by_task_group_id(db, task_group_id):
         '''更新当天任务'''
@@ -256,8 +279,8 @@ class TaskGroup(object):
 
 
 if __name__ == '__main__':
-    dbutil.db_host = "192.168.1.53"
-    dbutil.db_name = "vm3"
+    dbutil.db_host = "192.168.1.21"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"

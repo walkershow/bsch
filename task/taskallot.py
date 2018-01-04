@@ -295,33 +295,29 @@ class TaskAllot(object):
 
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm2"
-    dbutil.db_user = "vm"
+    dbutil.db_name = "vm-test"
+    dbutil.db_user = "dba"
     dbutil.db_port = 3306
-    dbutil.db_pwd = "123456"
-    pc = ParallelControl(18, dbutil)
-    t=TaskAllot(0, 1,pc, dbutil)
-    while True:
-        t.allot_by_priority("d:\\10.bat")
-        time.sleep(5)
-    # task_group_id = None
-    # print len(sys.argv)
-    # if len(sys.argv)>1:
-    #     task_group_id = int(sys.argv[1])
-    #     print task_group_id
-    #     TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
-    # # while True:
-    # #     t.allot_by_priority("d:\\10.bat")
-    # #     # t.allot_by_rand("d:\\10.bat")
-    # #     time.sleep(1)
-    #     TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
-    # t=TaskAllot(1,1, dbutil)
-    # if task_group_id :
-    #     exit(0)
+    dbutil.db_pwd = "chinaU#2720"
+    task_group_id = None
+    print len(sys.argv)
+    if len(sys.argv)>1:
+        task_group_id = int(sys.argv[1])
+        print task_group_id
+        TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
     # while True:
-    #     try:
-    #         t.reset_when_newday()
-    #         time.sleep(10)
-    #     except:
-    #         time.sleep(5)
-    #         continue
+    #     t.allot_by_priority("d:\\10.bat")
+    #     # t.allot_by_rand("d:\\10.bat")
+    #     time.sleep(1)
+        TaskGroup.reset_rantimes_allot_impl(dbutil, task_group_id)
+    t=TaskAllot(1,1,None, dbutil)
+    if task_group_id :
+        exit(0)
+    while True:
+        try:
+            t.reset_when_newday()
+            time.sleep(10)
+        except Exception,e:
+            print "except",e
+            time.sleep(5)
+            continue
