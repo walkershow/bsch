@@ -27,11 +27,12 @@ class TaskError(Exception):
 class Task(object):
     '''任务
     '''
-    def __init__(self, id, is_default, db):
+    def __init__(self, id, is_default,  db, rid=None):
         self.id = id
         print db
         self.db = db 
         self.is_default = is_default
+        self.rid = rid
         self.__initTask()
 
     def __initTask(self):

@@ -4,11 +4,13 @@
 # @Author: coldplay
 # @Contact: coldplay
 # @Last Modified By: coldplay
-# @Last Modified Time: Sep 13, 2017 3:47 PM
+# @Last Modified Time: Jan 4, 2018 5:59 PM
 # @Description: Modify Here, Please
-
+import sys
 import dbutil
 import random
+sys.path.append("..")
+from task.zero_running_rule import ZeroTask,ZeroTaskError
 from logbytask.logtask import LogTask,LogTaskError
 # from task.parallel import ParallelControl,ParallelControlException
 
@@ -18,6 +20,7 @@ class TaskProfile(object):
     server_id = None
     log_task = None
     pc = None
+    zt = None
     
     def __init__(self, server_id, dbs, pc, log_handler):
         TaskProfile.db = dbs
@@ -25,16 +28,17 @@ class TaskProfile(object):
         TaskProfile.server_id = server_id
         TaskProfile.log_task = LogTask(dbs, log_handler)
         TaskProfile.pc = pc
+        TaskProfile.zt = ZeroTask(server_id, dbs)
 
     def get_task_type(self, task_id):
-        sql = "select type,terminal_type from vm_task where id=%d "%(task_id)
+        sql = "select type,user_type,terminal_type from vm_task where id=%d "%(task_id)
         res = self.db.select_sql(sql)
         if not res:
             return None,None
-        return res[0][0],res[0][1]
+        return res[0][0],res[0][1],res[0][2]
 
     def get_reenable_day(self, task_type):
-        sql = "select re_enable_day_start_range,re_enable_day_end_range from vm_task_type "\
+        sql = "select re_enable_hour_start_range,re_enable_hour_end_range from vm_task_reenable "\
         " where id = %d"%(task_type)
         res = self.db.select_sql(sql)
         if not res:
@@ -49,7 +53,7 @@ class TaskProfile(object):
     def reuse_profiles(self, vm_id, task_type):
         # return
         sql = "delete from vm_task_profile_latest where server_id=%d and vm_id=%d and status in(-2,-1,1,2,4,6) "\
-        "and TIMESTAMPDIFF(DAY, start_time, now())>=re_enable_days "
+        "and TIMESTAMPDIFF(HOUR, start_time, now())>=re_enable_hours "
         sql = sql%(self.server_id, vm_id)
         self.logger.info(sql)
         ret= self.db.execute_sql(sql)
@@ -70,9 +74,6 @@ class TaskProfile(object):
         profiles = []
         sql = ""
         self.reuse_profiles(vm_id, task_type)
-        # print self.server_id, vm_id, task_type
-        # sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d"\
-        # " and task_type = %d "%(self.server_id, vm_id, task_type)
         if not is_default:
             sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d and task_id!=0 "\
             %(self.server_id, vm_id)
@@ -115,10 +116,13 @@ class TaskProfile(object):
         is_default = False
         if task_group_id == 0:
             is_default = True
-        task_type, terminal_type = self.get_task_type(task_id) 
-        self.logger.info("task id:%d get task type task_type:%d, terminal_type:%d",task_id, task_type, terminal_type)
+        task_type, user_type, terminal_type = self.get_task_type(task_id) 
+        self.logger.info("task id:%d get task type task_type:%d,user_type:%d, terminal_type:%d",task_id, task_type, user_type,terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ
-        profile_id = self.get_task_usable_profiles(vm_id, task_type, terminal_type, is_default)
+        if is_default:
+            profile_id = self.zt.get_usable_profiles(vm_id, user_type, terminal_type) 
+        else:
+            profile_id = self.get_task_usable_profiles(vm_id, task_type, terminal_type, is_default)
         # print profile_id
         if not profile_id:
             self.logger.info("task id:%d no profile to use!!!", task_id)
@@ -128,9 +132,9 @@ class TaskProfile(object):
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id, task_id)
         self.pc.add_allocated_num(task_group_id)
 
-        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes)"\
-        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0) "%(
-            self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode)
+        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes,user_type, terminal_type)"\
+        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d) "%(
+            self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode,user_type, terminal_type)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
@@ -139,29 +143,29 @@ class TaskProfile(object):
                     self.server_id,vm_id, task_id, task_type, profile_id)
         # print self.server_id,vm_id, task_id, task_type, profile_id
         if task_id != 0:
-            self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1)
+            self.log_task_profile_latest(vm_id, task_id, task_type, profile_id, oprcode, -1, user_type, terminal_type)
         self.log_task.log(self.server_id, vm_id, task_id, status=-1, start_time="CURRENT_TIMESTAMP")
         return True
 
 
-    def log_task_profile_latest(self, vm_id, task_id, task_type, profile_id, oprcode, status):
-        re_enable_days = self.get_reenable_day(task_type)
-        print  self.server_id, vm_id, profile_id, task_type, task_id, re_enable_days, profile_id, task_type, task_id,re_enable_days
-        sql = "insert into vm_task_profile_latest(server_id,vm_id,profile_id,task_type,task_id,start_time,re_enable_days, oprcode, status)"\
-        " values(%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d, %d, %d) on duplicate key update  task_type=%d,"\
-        " start_time=CURRENT_TIMESTAMP, re_enable_days=%d, oprcode=%d, status=%d"%(
-            self.server_id, vm_id, profile_id, task_type, task_id, re_enable_days, oprcode, status,
-              task_type, re_enable_days, oprcode, status)
+    def log_task_profile_latest(self, vm_id, task_id, task_type, profile_id, oprcode, status, user_type,terminal_type):
+        re_enable_hours = self.get_reenable_day(task_type)
+        print  self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours 
+        sql = "insert into vm_task_profile_latest(server_id,vm_id,profile_id,task_type,task_id,start_time,re_enable_hours, oprcode, status, user_type,terminal_type)"\
+        " values(%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d, %d, %d, %d, %d) on duplicate key update  task_type=%d,"\
+        " start_time=CURRENT_TIMESTAMP, re_enable_hours=%d, oprcode=%d, status=%d"%(
+           self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours, oprcode, status, user_type, terminal_type,
+              task_type, re_enable_hours, oprcode, status)
         self.logger.info("latest:%s",sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)
-        self.log_task_profile(vm_id, task_id, task_type, profile_id, re_enable_days, oprcode)
+        self.log_task_profile(vm_id, task_id, task_type, profile_id, re_enable_hours, oprcode, user_type, terminal_type)
     
-    def log_task_profile(self, vm_id, task_id, task_type, profile_id, re_enable_days, oprcode):
-        sql = "insert into vm_task_profile_log(server_id,vm_id,profile_id,task_type,task_id,log_time,re_enable_days,oprcode)"\
-        " values(%d,%d,%d,%d,%d,CURRENT_TIMESTAMP, %d, %d) "%(
-            self.server_id, vm_id, profile_id, task_type, task_id, re_enable_days, oprcode)
+    def log_task_profile(self, vm_id, task_id, task_type, profile_id, re_enable_hours, oprcode, user_type, terminal_type):
+        sql = "insert into vm_task_profile_log(server_id,vm_id,profile_id,task_type,task_id,log_time,re_enable_hours,oprcode, user_type,terminal_type)"\
+        " values(%d,%d,%d,%d,%d,CURRENT_TIMESTAMP, %d, %d, %d, %d) "%(
+            self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours, oprcode, user_type, terminal_type)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)

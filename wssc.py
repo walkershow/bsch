@@ -71,7 +71,7 @@ def init():
     parser = optparse.OptionParser()
     parser.add_option("-i", "--ip", dest="db_ip", default="192.168.1.21",
             help="mysql database server IP addrss, default is 192.168.1.235" )
-    parser.add_option("-n", "--name", dest="db_name", default="vm2",
+    parser.add_option("-n", "--name", dest="db_name", default="vm3",
             help="database name, default is gamedb" )
     parser.add_option("-u", "--usrname", dest="username", default="vm",
         help="database login username, default is chinau" )
@@ -112,14 +112,14 @@ def init():
 
 def get_max_update_time():
     # sql = "select max(UNIX_TIMESTAMP(a.update_time))  from vm_cur_task a where a.server_id=%d and vm_id=%d group by server_id, vm_id"%(server_id,vm_id)
-    sql = "select id,cur_task_id,UNIX_TIMESTAMP(a.update_time) from vm_cur_task a where a.server_id=%d and status in (1,2)"%(server_id)
+    sql = "select id,cur_task_id,UNIX_TIMESTAMP(a.update_time),task_group_id from vm_cur_task a where a.server_id=%d and status in (1,2)"%(server_id)
     # sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a where a.server_id=%d "%(server_id)
     res = dbutil.select_sql(sql)
     vms_time = {}
     if not res:
         return vms_time
     for r in res:
-        vms_time[r[1]] = {"id":r[0],"ut":r[2]}
+        vms_time[r[1]] = {"id":r[0],"ut":r[2], "gid": r[3]}
     return vms_time
 
 def vpn_update_time():
@@ -168,6 +168,7 @@ def kill_zombie_proc(interval=140):
     for tid, item in vms_time.items():
         id = item['id'] 
         time = item['ut']
+        gid = item['gid']
         if not time:
             continue
         if time >= redial_time:
@@ -177,7 +178,7 @@ def kill_zombie_proc(interval=140):
                 logger.info("===========task proc:%d is not acting======", tid)
                 logger.info("task_id:%d,id:%d redial_time-stime>140", tid,id)
                 set_task_status(8,id)
-                script_name = get_scirpt_name(tid)
+                script_name = get_scirpt_name(tid, gid)
                 cmd_findstr = script_name + " -t %d"%(id)
                 proc = find_proc_by_cmdline(cmd_findstr)
                 kill_proc_by_pid(proc)
@@ -188,9 +189,11 @@ def kill_zombie_proc(interval=140):
     return vm_ids
 
 
-def runcmd(task_id, id, task_type):
-    if task_type >0:
-        script_name = task_script_names[task_type-1]
+def runcmd(task_id, id, task_type, task_group_id):
+    if task_type in range(0,6) and task_group_id!=0:
+        script_name = task_script_names[task_type]
+    elif task_group_id == 0:
+        script_name = "0.py"
     else:
         script_name = str(task_id) + ".py"
     script = os.path.join(script_path, script_name)
@@ -205,13 +208,13 @@ def runcmd(task_id, id, task_type):
     return True
 
 def new_task_come():
-    sql = "select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.task_type,b.timeout,b.standby_time from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
+    sql = "select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.user_type,b.timeout,b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id and a.status=-1 and a.server_id=%d and a.vm_id=%d"%(int(server_id), int(vm_id))
     # logger.debug(sql)
     logger.info(sql)
     res =dbutil.select_sql(sql)
     if not res:
-        return None,None,None,None,None,None,None
-    return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5],res[0][6]
+        return None,None,None,None,None,None,None,None
+    return res[0][0],res[0][1],res[0][2],res[0][3],res[0][4],res[0][5],res[0][6],res[0][7]
 
 def set_task_status(status,id):
     sql = 'update vm_cur_task set status=%d,update_time=current_timestamp where id=%d'%(status, id)
@@ -242,7 +245,7 @@ def get_task_scriptfile(task_id):
 
 
 def get_task_type(task_id):
-    sql = "select task_type from vm_task where id=%d"%(task_id)
+    sql = "select user_type from vm_task where id=%d"%(task_id)
     logger.info(sql)
     res =dbutil.select_sql(sql)
     if not res:
@@ -276,15 +279,17 @@ def notify_vpn_redial():
         logger.error("sql:%s, ret:%d", sql, ret)
 
     
-def get_scirpt_name(task_id):
+def get_scirpt_name(task_id, task_group_id):
+    if task_group_id ==0:
+        return "0.py"
     task_type = get_task_type(task_id)
     script_name = str(task_id)+".py"
-    if task_type >0:
-        script_name = task_script_names[task_type-1]
+    if task_type in range(0,6) and task_group_id!=0:
+        script_name = task_script_names[task_type]
     return script_name
 
 def del_timeout_task():
-    sql = "select id,cur_task_id from vm_cur_task where status in (1,2) and server_id=%d and vm_id=%d"%(server_id, vm_id)
+    sql = "select id,cur_task_id,task_group_id from vm_cur_task where status in (1,2) and server_id=%d and vm_id=%d"%(server_id, vm_id)
     logger.info(sql)
     res =dbutil.select_sql(sql)
     bflag =False
@@ -293,8 +298,10 @@ def del_timeout_task():
         for r in res:
             id = r[0]
             task_id = r[1]
-            script_name = get_scirpt_name(task_id)
+            task_group_id = r[2]
+            script_name = get_scirpt_name(task_id, task_group_id)
             cmd_findstr = script_name + " -t %d"%(id)
+            logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
             if not proc:
                 print cmd_findstr, "is not exist"
@@ -320,10 +327,10 @@ def main():
         while True:
             try:
                 while True:
-                    id, task_id, oprcode, profile_id, task_type,timeout,standby = new_task_come()
+                    id, task_id, oprcode, profile_id, task_type,timeout,standby, task_group_id = new_task_come()
                     if id is not None:
                         print "get task", task_id
-                        ret = runcmd(task_id, id, task_type)
+                        ret = runcmd(task_id, id, task_type, task_group_id)
                         if ret:
                             set_task_status(1,id)
                         else:

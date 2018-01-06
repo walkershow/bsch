@@ -393,8 +393,8 @@ def main_loop():
     sql = "select a.vm_id from vm_cur_task a where a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     vm_names,vm_ids = vms.get_vms(g_serverid)
-    # vm_ids = [1]
-    # vm_names = ['w1']
+    # vm_ids = [1,2]
+    # vm_names = ['w1', 'w2']
     while True:
         try:
             # if shutdown_by_flag():
@@ -414,12 +414,16 @@ def main_loop():
                         count = res[0][0]
                     logger.info("running task vm:%d,count:%d", vm_ids[i], count)
                     if count<g_pb:
-                        g_dsp_tmp = g_dsp
-                        g_dsp_tmp = g_dsp_tmp % (vm_names[i])
-                        task_id,task_group_id = g_taskallot.allot_by_priority(g_dsp_tmp.encode("gbk"))
+                        task_id,task_group_id,rid = g_taskallot.allot_by_priority()
+                        if task_id is None:
+                            print "no task to run"
+                            time.sleep(5)
+                            continue
                         ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
                         if not ret:
                             logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
+                        else:
+                            g_taskallot.add_ran_times(task_id,task_group_id, rid)
                         
             time.sleep(2)
 
@@ -452,7 +456,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm2",
+        default="vm3",
         help="database name, default is vm")
     parser.add_option(
         "-u",
@@ -577,8 +581,8 @@ def main():
             logger.info("reseting !!!")
             reset()
         tname = "queue_thread"
-        t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        t2.start()
+        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
+        # t2.start()
         # t3 = threading.Thread(target=reset_network, name="reset_network_thread")
         # t3.start()
         main_loop()
