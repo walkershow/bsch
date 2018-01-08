@@ -146,7 +146,7 @@ def get_zombie_vms():
     # sql = "select id,vmname from vm_list where server_id=%d and enabled=0 and status=1 and "\
     # " unix_timestamp(current_timestamp)-unix_timestamp(update_time)>%d"%(g_serverid, interval)
     sql = "select vm_id,vm_name from vm_list where server_id=%d and enabled=0 and status=1 "\
-    "and UNIX_TIMESTAMP(current_timestamp)-UNIX_TIMESTAMP(update_time)>%d"%(g_serverid, interval)
+    "and UNIX_TIMESTAMP(current_timestamp)-UNIX_TIMESTAMP(update_time) >%d "%(g_serverid, interval)
     # logger.info(sql)
     res = dbutil.select_sql(sql)
     if not res:
@@ -160,7 +160,8 @@ def get_zombie_vms():
 
 
 def get_max_update_time():
-    sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a,vm_list b  where  a.vm_id=b.id and b.enabled =0 and a.server_id=%d  group by  a.vm_id"%(g_serverid)
+    sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a,vm_list b  where  a.vm_id=b.id and b.enabled =0 and a.server_id=%d "\
+    "and status in(-1,1,2) group by  a.vm_id"%(g_serverid)
     res = dbutil.select_sql(sql)
     vms_time = {}
     if not res:
@@ -196,6 +197,9 @@ def get_zombie_vms2():
         return vm_ids 
     interval = int(get_restart_vm_interval())
     vms_time = get_max_update_time()
+    if not vms_time:
+        logger.info("==========there's no task running, and will no lastest running time!!!")
+        return vm_ids 
     redial_time = vpn_update_time()
     if not redial_time:
         return vm_ids
@@ -284,7 +288,7 @@ def pause_resume_vm():
     last_status = 1
     while True:
         try:
-            reset_zombie_vm()
+            # reset_zombie_vm()
             reset_network()
             status, update_time = vpn_status()
             
@@ -414,7 +418,7 @@ def main_loop():
                         count = res[0][0]
                     logger.info("running task vm:%d,count:%d", vm_ids[i], count)
                     if count<g_pb:
-                        task_id,task_group_id,rid = g_taskallot.allot_by_priority()
+                        task_id,task_group_id,rid = g_taskallot.allot_by_priority(vm_ids[i])
                         if task_id is None:
                             print "no task to run"
                             time.sleep(5)
@@ -581,8 +585,8 @@ def main():
             logger.info("reseting !!!")
             reset()
         tname = "queue_thread"
-        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        # t2.start()
+        t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
+        t2.start()
         # t3 = threading.Thread(target=reset_network, name="reset_network_thread")
         # t3.start()
         main_loop()

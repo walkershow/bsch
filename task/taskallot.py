@@ -143,15 +143,12 @@ class TaskAllot(object):
         return 0
             
     
-    def allot_by_priority(self, default_path= None):
+    def allot_by_priority(self, vm_id ):
         try:
             self.reset_when_newday()
             if self.selected_ids:
-                logger.info("====================")
-                logger.info("i am in selected ids")
-                logger.info("====================")
                 gid = self.get_valid_gid()
-                task = self.handle_taskgroup(gid, default_path)
+                task = self.handle_taskgroup(gid,vm_id )
                 if task is None:
                     return None,None,None
                 return task.id, gid, task.rid
@@ -197,9 +194,9 @@ class TaskAllot(object):
                 #不存在优先级高的任务组,执行随机分配
                 logger.info("no priority task, get rand taskgroup")
                 print("no priority task, get rand taskgroup")
-                return self.allot_by_rand(default_path)
+                return self.allot_by_rand(vm_id)
             else:
-                task = self.handle_taskgroup(gid, default_path)
+                task = self.handle_taskgroup(gid,vm_id)
                 if task is None:
                     return None,None,None
                 return task.id, gid, task.rid
@@ -207,7 +204,7 @@ class TaskAllot(object):
             raise TaskAllotError,"excute error:%s"%( t.message)
 
 
-    def allot_by_rand(self, default_path= None):
+    def allot_by_rand(self,vm_id ):
         try:
             sql = '''SELECT
                          a.id
@@ -245,31 +242,30 @@ class TaskAllot(object):
             self.selected_ids.sort()
             print self.selected_ids
 
-
             task = None
             task_group_id = self.get_valid_gid()
             if task_group_id == 0:
                 logger.info("get default taskgroup")
-                task = TaskGroup.getDefaultTask(self.db, self.server_id)
+                task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id)
                 if not task:
                     return None,None,None
                 print task
-                task.allot2(default_path)
+                task.allot2()
             else:
-                task = self.handle_taskgroup(task_group_id, default_path)
+                task = self.handle_taskgroup(task_group_id, vm_id )
             return task.id, task_group_id,task.rid
         except TaskError, t:
             raise TaskAllotError,"excute error:%s"%( t.message)
 
         
 
-    def handle_taskgroup(self, task_group_id, default_path):
+    def handle_taskgroup(self, task_group_id, vm_id ):
         print "task_group_id:", task_group_id
         tg = TaskGroup(task_group_id, self.db)
-        task = tg.choose_vaild_task(self.server_id)
+        task = tg.choose_vaild_task(self.server_id, vm_id)
         if not task:
             return None
-        task.allot2(default_path)
+        task.allot2()
 
         return task
     

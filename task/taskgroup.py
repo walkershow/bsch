@@ -48,11 +48,12 @@ class TaskGroup(object):
             self.tasks.append(task)
     
     @staticmethod
-    def getDefaultTask(db,server_id):
+    def getDefaultTask(db,server_id, vm_id):
         sql = "select id,user_type,terminal_type from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
-                and ran_times<run_times and server_id=%d "
-        sql = sql%(server_id)
+                and ran_times<run_times and server_id=%d and vm_id=%d"
+        sql = sql%(server_id, vm_id)
         # logger.info(sql)
+        print sql
         res= db.select_sql(sql)
         dtask = []
         task_id_list_pc = [10000,10001,10002,10003,10004,10005]
@@ -284,13 +285,13 @@ class TaskGroup(object):
         TaskGroup.impl_task_templ(db, task_group_id)
         TaskGroup.impl_task_templ_detail(db, task_group_id)
     
-    def choose_vaild_task(self, server_id):
+    def choose_vaild_task(self, server_id, vm_id=None):
         self.__initValidTasks()
         for t in self.tasks:
             task_id = t["task_id"]
             print "task_id:", task_id
             return Task(t["task_id"], False, self.db)
-        return TaskGroup.getDefaultTask(self.db, server_id)
+        return TaskGroup.getDefaultTask(self.db, server_id, vm_id)
 
 
 if __name__ == '__main__':

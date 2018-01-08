@@ -45,7 +45,7 @@ class Task(object):
         self.script_file = res[0][2]
         self.gen_type = res[0][3]
     
-    def allot2(self, cover_script_file):
+    def allot2(self):
         '''分配执行脚本替换掉默认的执行脚本
         cover_script_file:执行脚本路径文件名(任务脚本拷贝到这个路径含文件名)
         '''
@@ -56,8 +56,8 @@ class Task(object):
             # shutil.copy(filename, cover_script_file)
         except (OSError,IOError), e:
             # logger.error('exception', exc_info = True)
-            raise TaskError,"cannot copy %s to %s,error:%s"\
-                        %(filename, cover_script_file,e.message)
+            raise TaskError,"cannot copy %s ,error:%s"\
+                        %(filename,e.message)
     
     def allot(self,  cover_script_file):
         try:
