@@ -27,7 +27,7 @@ def init():
     parser = optparse.OptionParser()
     parser.add_option("-i", "--ip", dest="db_ip", default="192.168.1.21",
             help="mysql database server IP addrss, default is 192.168.1.235" ) 
-    parser.add_option("-n", "--name", dest="db_name", default="vm2",
+    parser.add_option("-n", "--name", dest="db_name", default="vm3",
             help="database name, default is gamedb" ) 
     parser.add_option("-u", "--usrname", dest="username", default="vm",
         help="database login username, default is chinau" )

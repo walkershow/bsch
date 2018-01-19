@@ -244,21 +244,21 @@ def get_task_scriptfile(task_id):
     return script
 
 
-def get_task_type(task_id):
+def get_user_type(task_id):
     sql = "select user_type from vm_task where id=%d"%(task_id)
     logger.info(sql)
     res =dbutil.select_sql(sql)
     if not res:
         return None
-    task_type = res[0][0]
-    return task_type
+    user_type = res[0][0]
+    return user_type
 
 def clean_all_chrome():
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
         if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
             # print proc.info['cmdline']
-            if proc.info["cmdline"] is not None and proc.info["cmdline"].find("chrome.exe") != -1:
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find("firefox.exe") != -1:
                 proc.kill()
 
 def find_proc_by_cmdline(cmdline):
@@ -282,10 +282,10 @@ def notify_vpn_redial():
 def get_scirpt_name(task_id, task_group_id):
     if task_group_id ==0:
         return "0.py"
-    task_type = get_task_type(task_id)
+    user_type = get_user_type(task_id)
     script_name = str(task_id)+".py"
-    if task_type in range(0,6) and task_group_id!=0:
-        script_name = task_script_names[task_type]
+    if user_type in range(0,6) and task_group_id!=0:
+        script_name = task_script_names[user_type]
     return script_name
 
 def del_timeout_task():
@@ -318,6 +318,13 @@ def del_timeout_task():
             #             print "id", id ,"===task_id",task_id, " is running"
             #             return
             # set_task_status(7,id)
+
+def update_status_and_time(db):
+    sql = "update vm_list set `status` = 1, update_time = CURRENT_TIMESTAMP where server_id = %s and vm_id = %s" %(server_id, vm_id)
+    res = db.execute_sql(sql)
+    if res == 0:
+        logger.error("update zero row")
+    return res
 
 def main():
     myapp = singleton.singleinstance("wssc.py")

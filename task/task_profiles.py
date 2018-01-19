@@ -4,13 +4,13 @@
 # @Author: coldplay
 # @Contact: coldplay
 # @Last Modified By: coldplay
-# @Last Modified Time: Jan 4, 2018 5:59 PM
+# @Last Modified Time: Jan 16, 2018 5:48 PM
 # @Description: Modify Here, Please
 import sys
 import dbutil
 import random
 sys.path.append("..")
-from task.zero_running_rule import ZeroTask,ZeroTaskError
+from zero_running_rule import ZeroTask,ZeroTaskError
 from logbytask.logtask import LogTask,LogTaskError
 # from task.parallel import ParallelControl,ParallelControlException
 
@@ -59,7 +59,7 @@ class TaskProfile(object):
         ret= self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)
-        self.reuse_profiles2(vm_id, task_type)
+        self.reuse_profiles2(vm_id)
 
     def reuse_profiles2(self, vm_id):
         # return
@@ -75,7 +75,7 @@ class TaskProfile(object):
         sql = ""
         self.reuse_profiles(vm_id)
         sql = "select profile_id from vm_task_profile_latest where server_id=%d and vm_id=%d and  "\
-        "user_type=%d and terminal_type=%d"
+        "user_type=%d and terminal_type=%d"\
             %(self.server_id, vm_id, user_type, terminal_type)
         res = self.db.select_sql(sql)
         for r in res:
@@ -83,31 +83,22 @@ class TaskProfile(object):
             profiles.append(id)
         return profiles
 
-    def get_inited_profiles(self, vm_id, tty, uty):
+
+    def get_inited_profiles(self, vm_id, tty, uty, day):
         sql = "select a.profile_id from vm_users a where a.server_id=%d and a.vm_id=%d "\
-        "and user_type=%d and a.terminal_type = %d "
-        sql = sql%(self.server_id, vm_id, uty, tty)
-        # logger.info(sql)
+        "and user_type=%d and a.terminal_type = %d and TIMESTAMPDIFF(DAY,a.create_time,now())=%d "
+        sql = sql%(self.server_id, vm_id, uty, tty, day)
+        self.logger.info(sql)
         res = self.db.select_sql(sql)
         profile_ids = []
         for r in res:
             profile_ids.append(r[0])
         return profile_ids
 
-    # def get_vm_profiles(self, vm_id, user_type, terminal_type):
-    #     sql = "select a.profile_id from vm_profiles a,profiles b where a.server_id=%d and a.vm_id=%d "\
-    #     "and b.terminal_type = %d and and a.profile_id = b.id  "
-    #     sql = sql%(self.server_id, vm_id, terminal_type)
-    #     # self.logger.info(sql)
-    #     res = self.db.select_sql(sql)
-    #     profile_ids = []
-    #     for r in res:
-    #         profile_ids.append(r[0])
-    #     return profile_ids
 
-    def get_task_usable_profiles(self, vm_id, user_type, terminal_type):
-        all_profiles = self.get_vm_profiles(vm_id, terminal_type, user_type)
-        used_profiles = self.get_used_profiles(vm_id, user_type)
+    def get_task_usable_profiles(self, vm_id, user_type, terminal_type, day):
+        all_profiles = self.get_inited_profiles(vm_id, terminal_type, user_type, day)
+        used_profiles = self.get_used_profiles(vm_id, user_type, terminal_type)
         # print all_profiles, used_profiles
         usable_profiles = list(set(all_profiles).difference(set(used_profiles)))
         # print usable_profiles
@@ -117,8 +108,7 @@ class TaskProfile(object):
         return profile_id
 
     
-    def set_cur_task_profile(self, vm_id, task_id, task_group_id):
-        # self.delete_finish_task(vm_id)
+    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day):
         is_default = False
         if task_group_id == 0:
             is_default = True
@@ -128,7 +118,7 @@ class TaskProfile(object):
         if is_default:
             profile_id = self.zt.get_usable_profiles(vm_id, user_type, terminal_type) 
         else:
-            profile_id = self.get_task_usable_profiles(vm_id, user_type, terminal_type)
+            profile_id = self.get_task_usable_profiles(vm_id, user_type, terminal_type, day)
         # print profile_id
         if not profile_id:
             self.logger.warn("vm_id:%d task id:%d no profile to use!!!", vm_id ,task_id)
@@ -162,7 +152,7 @@ class TaskProfile(object):
         " start_time=CURRENT_TIMESTAMP, re_enable_hours=%d, oprcode=%d, status=%d"%(
            self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours, oprcode, status, user_type, terminal_type,
               task_type, re_enable_hours, oprcode, status)
-        self.logger.info("latest:%s",sql)
+        self.logger.debug("latest:%s",sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise Exception,"%s exec failed ret:%d"%(sql, ret)

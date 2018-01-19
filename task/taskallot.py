@@ -39,6 +39,7 @@ class TaskAllot(object):
         self.selected_ids= [] 
         self.pc =  pc
 
+
     def log_task_id(self,id, task_id):
         sql ="update vm_allot_task set cur_task_id=%d where id=%d"%(task_id,id)
         ret = self.db.execute_sql(sql)
@@ -68,7 +69,7 @@ class TaskAllot(object):
         '''
         group_ids = []
         sql = "select task_group_id from vm_cur_task where server_id=%d and status=1 and task_group_id !=0 "%(self.server_id)
-        print sql
+        logger.debug(sql)
         res = dbutil.select_sql(sql)
         for r in res:
             id = r[0]
@@ -80,7 +81,7 @@ class TaskAllot(object):
         '''
         group_ids = []
         sql = "select task_group_id from vm_cur_task where server_id=%d and status in(-1,1) and task_group_id !=0 "%(self.server_id)
-        print sql
+        logger.debug(sql)
         res = dbutil.select_sql(sql)
         for r in res:
             id = r[0]
@@ -97,7 +98,6 @@ class TaskAllot(object):
         #sql = "select update_time from vpn_status where serverid=%d and vpnstatus=1 and (ip is not null and ip!='') "%(g_serverid)
         sql = "select update_time,ip from vpn_status where serverid=%d and vpnstatus=1 "%(self.server_id)
         res = dbutil.select_sql(sql)
-        print "res", res
         if res:
             update_time = res[0][0]
             ip = res[0][1]
@@ -129,12 +129,12 @@ class TaskAllot(object):
             if stime< rtime:
                 return True
             else:
-                logger.info("task_group_id:%d succ_time>=redial_time", task_group_id)
-                print("task_group_id:%d succ_time>=redial_time", task_group_id)
+                logger.warn("task_group_id:%d succ_time>=redial_time", task_group_id)
         return False
     
-    def get_valid_gid(self):
-        return 0
+    def get_valid_gid(self, get_default):
+        if get_default:
+            return 0
         while self.selected_ids:
             gid = self.selected_ids.pop()
             if self.right_to_allot(gid):
@@ -143,11 +143,11 @@ class TaskAllot(object):
         return 0
             
     
-    def allot_by_priority(self, vm_id ):
+    def allot_by_priority(self, vm_id, get_default ):
         try:
             self.reset_when_newday()
             if self.selected_ids:
-                gid = self.get_valid_gid()
+                gid = self.get_valid_gid(get_default)
                 task = self.handle_taskgroup(gid,vm_id )
                 if task is None:
                     return None,None,None
@@ -188,13 +188,12 @@ class TaskAllot(object):
                 
             self.selected_ids = list(set(ids) - rid_set)
             print self.selected_ids
-            gid = self.get_valid_gid()
+            gid = self.get_valid_gid(get_default)
 
             if gid == 0:
                 #不存在优先级高的任务组,执行随机分配
                 logger.info("no priority task, get rand taskgroup")
-                print("no priority task, get rand taskgroup")
-                return self.allot_by_rand(vm_id)
+                return self.allot_by_rand(vm_id,get_default)
             else:
                 task = self.handle_taskgroup(gid,vm_id)
                 if task is None:
@@ -204,7 +203,7 @@ class TaskAllot(object):
             raise TaskAllotError,"excute error:%s"%( t.message)
 
 
-    def allot_by_rand(self,vm_id ):
+    def allot_by_rand(self,vm_id, get_default ):
         try:
             sql = '''SELECT
                          a.id
@@ -240,16 +239,17 @@ class TaskAllot(object):
             logger.info("band task_group_id:%s", band_str)
             self.selected_ids = list(set(ids) - rid_set)
             self.selected_ids.sort()
-            print self.selected_ids
+            # print self.selected_ids
 
             task = None
-            task_group_id = self.get_valid_gid()
+            task_group_id = self.get_valid_gid(get_default)
             if task_group_id == 0:
-                logger.info("get default taskgroup")
+                logger.warn("no else task to run,find default taskgroup")
                 task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id)
                 if not task:
+                    logger.warn("no default task to run")
                     return None,None,None
-                print task
+                # print task
                 task.allot2()
             else:
                 task = self.handle_taskgroup(task_group_id, vm_id )
@@ -260,7 +260,6 @@ class TaskAllot(object):
         
 
     def handle_taskgroup(self, task_group_id, vm_id ):
-        print "task_group_id:", task_group_id
         tg = TaskGroup(task_group_id, self.db)
         task = tg.choose_vaild_task(self.server_id, vm_id)
         if not task:

@@ -74,7 +74,6 @@ class TaskGroup(object):
                 dtask.append(task)
         else:
             return None
-        print dtask
         task = choice(dtask)
         return Task(task["task_id"], True, db, task['id'])
 
@@ -228,7 +227,6 @@ class TaskGroup(object):
             sql = "select id,start_min,end_min from vm_task_allot_templ_detail where id=%d order by sub_id"%(detail_id)
             res = db.select_sql(sql)
             if not res:
-                print sql, " empty"
                 continue
             pos = len(res) + 1
             for td in res:
@@ -255,7 +253,6 @@ class TaskGroup(object):
 
         sql ="update vm_task_group set times=FLOOR(times_start_range + (RAND() * (times_end_range-times_start_range)))" \
         "where templ_id>0 and id=%d"%(task_group_id) 
-        print sql
         ret = db.execute_sql(sql)
         if ret<0:
             raise TaskGroupError,"%s excute error;ret:%d"%(sql, ret)
@@ -289,7 +286,6 @@ class TaskGroup(object):
         self.__initValidTasks()
         for t in self.tasks:
             task_id = t["task_id"]
-            print "task_id:", task_id
             return Task(t["task_id"], False, self.db)
         return TaskGroup.getDefaultTask(self.db, server_id, vm_id)
 

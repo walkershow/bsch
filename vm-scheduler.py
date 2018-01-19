@@ -18,6 +18,7 @@ import threading
 import signal
 import logging
 import logging.config
+import colorer
 import dbutil
 import atexit
 import commands
@@ -32,6 +33,7 @@ import vms,vm_utils
 from task_profiles import TaskProfile
 import task.parallel
 from task.parallel import ParallelControl,ParallelControlException
+from task.user import UserAllotError, UserAllot
 from logbytask.logtask import LogTask,LogTaskError
 global g_vManager_path
 global g_current_dir
@@ -54,7 +56,8 @@ vm_ids = []
 g_reset_waittime = 120
 g_pb = 4
 g_pc = None
-
+exit_flag = False
+g_user = None
 #标识是否是进入暂停状态 0:否 1:是
 
 
@@ -287,6 +290,8 @@ def log_reset_info(vm_id):
 def pause_resume_vm():
     last_status = 1
     while True:
+        if exit_flag:
+            break
         try:
             # reset_zombie_vm()
             reset_network()
@@ -321,7 +326,8 @@ def pause_resume_vm():
         except:
             logger.error(
                 '[pasue_reusme_vm] exception on main_loop', exc_info=True)
-    logger.info("[%s] exit pause_resume_vm", tname)
+            time.sleep(3)
+    logger.info("exit pause_resume_vm")
         
 
 def get_shutdown_time():
@@ -389,6 +395,17 @@ def shutdown_by_flag():
     logger.info("=======shutdown all vm finished============")
     return True
 
+def can_take_task():
+    times_one_day = g_user.runtimes_one_day()
+    sql = "select count(1) from vm_task_runtimes_config where "\
+    "users_used_amount<%s and remained=1 "%(times_one_day)
+    logger.debug(sql)
+    res = dbutil.select_sql(sql)
+    if res:
+        count = res[0][0]
+        if count:
+            return True
+    return False
 
 def main_loop():
     # reset()
@@ -408,26 +425,36 @@ def main_loop():
             # reset_vms_oneday()
             for i in range(0, len(vm_ids)):
                 sqltmp = sql %(g_serverid, vm_ids[i])
-                print sqltmp
+                # print sqltmp
+                logger.debug(sqltmp)
                 res = dbutil.select_sql(sqltmp)
                 if not res :
                     sqltmp = sql_count%(g_serverid, vm_ids[i])
                     res = dbutil.select_sql(sqltmp)
                     count = 0
+                    get_default = False
                     if res:
                         count = res[0][0]
-                    logger.info("running task vm:%d,count:%d", vm_ids[i], count)
+                    # logger.warn("running task vm:%d,count:%d", vm_ids[i], count)
                     if count<g_pb:
-                        task_id,task_group_id,rid = g_taskallot.allot_by_priority(vm_ids[i])
+                        if not can_take_task():
+                            logger.warn("没有可运行任务名额,只能跑零跑任务".decode("utf-8").encode("gbk"))
+                            get_default = True 
+                        task_id,task_group_id,rid = g_taskallot.allot_by_priority(vm_ids[i], get_default)
                         if task_id is None:
-                            print "no task to run"
+                            logger.warn("虚拟机:%d 没有任务可运行".decode("utf-8").encode("gbk"), vm_ids[i])
                             time.sleep(5)
                             continue
-                        ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
+                        ret = g_user.allot_user(vm_ids[i], task_group_id, task_id )
+                        # ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
                         if not ret:
-                            logger.info("vm_id:%d,task_id:%d,task_group_id:%d no profile to run", vm_ids[i], task_id, task_group_id)
+                            logger.warn("vm_id:%d,task_id:%d,task_group_id:%d no user to run", vm_ids[i], task_id, task_group_id)
                         else:
                             g_taskallot.add_ran_times(task_id,task_group_id, rid)
+                    else:
+                        logger.warn("虚拟机:%d 当前运行任务数:%d>=4".decode("utf-8").encode("gbk"), vm_ids[i],count)
+                else:
+                    logger.info("当前虚拟机:%d,已分配任务或有正在执行的任务".decode("utf-8").encode("gbk"), vm_ids[i])
                         
             time.sleep(2)
 
@@ -548,8 +575,8 @@ def init():
     dbutil.db_pwd = options.password
     dbutil.logger = logger
 
-    global g_vpn_db
-    g_vpn_db = DBUtil(logger,options.db_ip,3306, "vpntest", options.username, options.password,'utf8')
+    # global g_vpn_db
+    # g_vpn_db = DBUtil(logger,options.db_ip,3306, "vpntest", options.username, options.password,'utf8')
 
 
     
@@ -560,13 +587,14 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot,g_logtask,g_task_profile,g_pc
+    global g_taskallot,g_logtask,g_task_profile,g_pc,g_user
     task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil)
     g_taskallot = TaskAllot(g_want_init_task,g_serverid, g_pc,dbutil)
     g_logtask = LogTask(dbutil, logger)
-    g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
+    # g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
+    g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
 
     vms.logger = logger
     vms.dbutil = dbutil
@@ -587,11 +615,12 @@ def main():
         tname = "queue_thread"
         t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
         t2.start()
-        # t3 = threading.Thread(target=reset_network, name="reset_network_thread")
-        # t3.start()
         main_loop()
     except (KeyboardInterrupt, SystemExit):
-        logger.error("exit system,start to shut down all vm...")
+        print("exit system,start to shut down all vm...")
+        global exit_flag
+        exit_flag = True
+        time.sleep(10)
         exit(0)
         # vms.shutdown_allvm(g_serverid)
         # logger.info("shutdown all vm done")

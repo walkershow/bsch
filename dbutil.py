@@ -37,6 +37,7 @@ def error_duplicate_key():
 
 def create_connection():
 	''' connect OK, return a connection handle; connect fail, return None'''
+
 	global logger
 	if logger is None:
 		logger = get_default_logger()
@@ -68,12 +69,12 @@ def close_connection():
 
 def select_sql(sql): 
 	''' result set: None--fail, empty[]--OK, no any data set, else[]--OK, has a data set '''
-
+	t_lock.acquire()
 	if db_conn is None:
 		create_connection()
 	if db_conn is None:
 		logger.error('db_conn is None')
-					
+		t_lock.release()			
 		return None 
 
 	try:
@@ -82,6 +83,7 @@ def select_sql(sql):
 		ret = cursor.fetchall()
 		cursor.close()
 		db_conn.commit()
+		t_lock.release()			
 		return ret
 	except Exception, e:
 		logger.error('exception', exc_info = True)
@@ -90,15 +92,18 @@ def select_sql(sql):
 			db_lasterrcode = e.args[0]
 			if e.args[0] == 2003 or e.args[0] == 1152 or e.args[0] == 1042 or e.args[0] == 2006:
 				close_connection()
+		t_lock.release()			
 		return None
+	t_lock.release()			
 
 def select_sqlwithdict(sql): 
 	''' result set: None--fail, empty[]--OK, no any data set, else[]--OK, has a data set '''
-
+	t_lock.acquire()
 	if db_conn is None:
 		create_connection()
 	if db_conn is None:
 		logger.error('db_conn is None')
+		t_lock.release()			
 		return None 
 
 	try:
@@ -107,6 +112,7 @@ def select_sqlwithdict(sql):
 		ret = cursor.fetchall()
 		cursor.close()
 		db_conn.commit()
+		t_lock.release()			
 		return ret
 	except Exception, e:
 		logger.error('exception', exc_info = True)
@@ -115,7 +121,9 @@ def select_sqlwithdict(sql):
 			db_lasterrcode = e.args[0]
 			if e.args[0] == 2003 or e.args[0] == 1152 or e.args[0] == 1042 or e.args[0] == 2006:
 				close_connection()
+		t_lock.release()			
 		return None
+	t_lock.release()			
 
 
 def execute_sql(sql):
@@ -147,6 +155,7 @@ def execute_sql(sql):
 				close_connection()
 		t_lock.release()			
 		return -2
+	t_lock.release()			
 
 
 ###############################################################################################

@@ -12,7 +12,6 @@ sys.path.append("..")
 import dbutil
 import random
 
-logger = None
 
 class ParallelControlException(Exception):
     pass
@@ -21,9 +20,10 @@ class ParallelControl(object):
     '''任务分配'''
 
 
-    def __init__(self, server_id, db):
+    def __init__(self, server_id, db, logger):
         self.db = db 
         self.server_id = server_id
+        self.logger = logger
 
 
     def is_ran_out_parallel_num(self, task_group_id):
@@ -31,10 +31,10 @@ class ParallelControl(object):
         '''
         pnum = self.get_parallel_num(task_group_id)
         if pnum is None:
-            logger.info("pnum is None")
+            self.logger.info("pnum is None")
             return True
         allocated_num = self.get_allocated_num_on_ipchange(task_group_id)
-        logger.info("pnum:%d,allocate_num:%d", pnum, allocated_num)
+        self.logger.info("pnum:%d,allocate_num:%d", pnum, allocated_num)
         if allocated_num>=pnum:
             return True
         return False
@@ -65,7 +65,7 @@ class ParallelControl(object):
     
     def get_allocated_num_on_ipchange(self, task_group_id):
         sql = "select allocated_num from vm_parallel_control_info where server_id=%d and task_group_id=%d"%(self.server_id, task_group_id)
-        logger.info(sql)
+        self.logger.info(sql)
         res = self.db.select_sql(sql)
         if res:
             return res[0][0]
@@ -73,23 +73,23 @@ class ParallelControl(object):
 
     def add_allocated_num(self, task_group_id):
         if not self.get_parallel_num(task_group_id):
-            logger.info("task_group_id:%d not allow parallel", task_group_id)
+            self.logger.info("task_group_id:%d not allow parallel", task_group_id)
             return
         sql = "insert into vm_parallel_control_info(server_id,task_group_id,allocated_num,update_time) values("\
         "%d,%d,1,CURRENT_TIMESTAMP) on duplicate key update allocated_num=allocated_num+1,update_time=CURRENT_TIMESTAMP  "%(
             self.server_id, task_group_id)
         # sql = "update vm_parallel_control_info set allocated_num=allocated_num+1,update_time=CURRENT_TIMESTAMP  where server_id=%d and task_group_id=%d"%(
         #     server_id, task_group_id)
-        logger.info(sql)
+        self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise ParallelControlException,"%s excute error;ret:%d"%(sql, ret)
 
     def reset_allocated_num(self ):
-        logger.info("server:%d reset allocated when ip change", self.server_id)
+        self.logger.info("server:%d reset allocated when ip change", self.server_id)
         sql = "update vm_parallel_control_info set allocated_num=0,update_time=CURRENT_TIMESTAMP where server_id=%d "%(
             self.server_id)
-        logger.info(sql)
+        self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise ParallelControlException,"%s excute error;ret:%d"%(sql, ret)
