@@ -398,7 +398,7 @@ def shutdown_by_flag():
 def can_take_task():
     times_one_day = g_user.runtimes_one_day()
     sql = "select count(1) from vm_task_runtimes_config where "\
-    "users_used_amount<%s and remained=1 "%(times_one_day)
+    " date(used_out_time) != current_date"
     logger.debug(sql)
     res = dbutil.select_sql(sql)
     if res:
