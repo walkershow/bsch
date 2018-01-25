@@ -29,8 +29,6 @@ def auto_encoding(str_enc):
     return str_enc
 
 
-s = auto_encoding("你好啊")
-print s
 
 print "getmyip"
 getmyip = GetOutip()

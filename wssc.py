@@ -9,6 +9,7 @@ import sys
 import optparse
 import os
 import time
+import datetime
 import logging
 import logging.config
 import dbutil
@@ -378,18 +379,18 @@ def update_status_and_time(db):
 
 
 def removePath(destinationPath):
-    if os.path.exists(destinationPath):
-        pathList = os.listdir(destinationPath)
-        for path in pathList:
-            pathFull = os.path.join(destinationPath, path)
-            print pathFull
-            if os.path.isdir(pathFull):
-                removePath(pathFull)
-            try:
+    try:
+        if os.path.exists(destinationPath):
+            pathList = os.listdir(destinationPath)
+            for path in pathList:
+                pathFull = os.path.join(destinationPath, path)
+                print pathFull
+                if os.path.isdir(pathFull):
+                    removePath(pathFull)
                 shutil.rmtree(destinationPath, True)
-            except Exception, e:
-                logger.error("delete tempdir:%s error:%s", destinationPath,
-                             e.message)
+    except Exception, e:
+        logger.error("delete tempdir error:%s", 
+                    e.message)
 
 
 def clear_on_newday(temp_dir):
@@ -439,12 +440,14 @@ def main():
         traceback.print_exc()
         # logger.error('exception on main_loop', exc_info = True)
 
+def test_clear():
+    init()
+    clear_on_newday("d:\profiles")
 
 if __name__ == "__main__":
     while True:
         try:
-            # main()
-            clear_on_newday("~/temp")
+            main()
         except Exception, e:
             print 'traceback.print_exc():'
             traceback.print_exc()
