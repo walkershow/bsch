@@ -17,14 +17,17 @@ import ctypes
 import traceback
 import singleton
 import psutil
+import shutil
 user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
+cur_date = None
 vm_id = 0
 server_id = 0
 script_path = None
 # task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
 task_script_names = ['bdads.py', 'sgads.py', '360ads.py']
+tempdir = r'C:\Users\Administrator\AppData\Local\Temp'
 
 
 class LASTINPUTINFO(ctypes.Structure):
@@ -243,9 +246,9 @@ def runcmd(task_id, id, task_type, task_group_id):
 
 def new_task_come():
     sql = '''select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.user_type,b.timeout,
-    b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id 
-    and a.status=-1 and a.server_id=%d and a.vm_id=%d''' % (
-        int(server_id), int(vm_id))
+    b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id
+    and a.status=-1 and a.server_id=%d and a.vm_id=%d''' % (int(server_id),
+                                                            int(vm_id))
     # logger.debug(sql)
     logger.info(sql)
     res = dbutil.select_sql(sql)
@@ -335,9 +338,8 @@ def get_scirpt_name(task_id, task_group_id):
 
 
 def del_timeout_task():
-    sql = '''select id,cur_task_id,task_group_id from vm_cur_task 
-    where status in (1,2) and server_id=%d and vm_id=%d''' % (
-        server_id, vm_id)
+    sql = '''select id,cur_task_id,task_group_id from vm_cur_task
+    where status in (1,2) and server_id=%d and vm_id=%d''' % (server_id, vm_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
@@ -375,6 +377,32 @@ def update_status_and_time(db):
     return res
 
 
+def removePath(destinationPath):
+    if os.path.exists(destinationPath):
+        pathList = os.listdir(destinationPath)
+        for path in pathList:
+            pathFull = os.path.join(destinationPath, path)
+            print pathFull
+            if os.path.isdir(pathFull):
+                removePath(pathFull)
+            try:
+                shutil.rmtree(destinationPath, True)
+            except Exception, e:
+                logger.error("delete tempdir:%s error:%s", destinationPath,
+                             e.message)
+
+
+def clear_on_newday(temp_dir):
+    global cur_date
+    today = datetime.date.today()
+    print "today:", today, "====", "cur_date:", cur_date
+    if today != cur_date:
+        logger.info("==========clear tempdir on new day start==========")
+        removePath(temp_dir)
+        cur_date = today
+        logger.info("==========clear tempdir on new day end==========")
+
+
 def main():
     myapp = singleton.singleinstance("wssc.py")
     myapp.run()
@@ -383,6 +411,7 @@ def main():
         while True:
             try:
                 while True:
+                    clear_on_newday(temp_dir)
                     id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id = new_task_come(
                     )
                     if id is not None:
@@ -414,7 +443,8 @@ def main():
 if __name__ == "__main__":
     while True:
         try:
-            main()
+            # main()
+            clear_on_newday("~/temp")
         except Exception, e:
             print 'traceback.print_exc():'
             traceback.print_exc()
