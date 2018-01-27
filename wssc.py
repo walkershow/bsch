@@ -402,7 +402,9 @@ def clear_on_newday(temp_dir):
         logger.info("==========clear tempdir on new day start==========")
         removePath(temp_dir)
         cur_date = today
+        os.mkdir(temp_dir)
         logger.info("==========clear tempdir on new day end==========")
+
 
 
 def main():
@@ -413,7 +415,7 @@ def main():
         while True:
             try:
                 while True:
-                    clear_on_newday(temp_dir)
+                    clear_on_newday(tempdir)
                     id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id = new_task_come(
                     )
                     if id is not None:
