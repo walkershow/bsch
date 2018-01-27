@@ -386,7 +386,8 @@ def removePath(destinationPath):
                 pathFull = os.path.join(destinationPath, path)
                 print pathFull
                 if os.path.isdir(pathFull):
-                    removePath(pathFull)
+                    if pathFull.find("_MEI") != -1:
+                        removePath(pathFull)
                 shutil.rmtree(destinationPath, True)
     except Exception, e:
         logger.error("delete tempdir error:%s", 
