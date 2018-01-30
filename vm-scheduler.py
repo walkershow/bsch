@@ -15,7 +15,7 @@ import threading
 import signal
 import logging
 import logging.config
-import colorer  # for colored logger
+# import colorer  # for colored logger
 import dbutil
 from task.taskallot import TaskAllot
 import task.taskallot
@@ -452,20 +452,20 @@ def main_loop():
                     # logger.warn("running task vm:%d,count:%d", vm_ids[i], count)
                     if count < g_pb:
                         if not can_take_task():
-                            logger.warn(utils.auto_encoding("没有可运行任务名额,只能跑零跑任务")
+                            logger.warn(utils.auto_encoding("vm:%d\
+                                        没有可运行任务名额,只能跑零跑任务"),vm_ids[i]
                                         )
                             get_default = True
                         task_id, task_group_id, rid = g_taskallot.allot_by_priority(
                             vm_ids[i], get_default)
                         if task_id is None:
                             logger.warn(
-                                utils.auto_encoding("虚拟机:%d 没有任务可运行"),
+                                utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
                                 vm_ids[i])
                             time.sleep(5)
                             continue
                         ret = g_user.allot_user(vm_ids[i], task_group_id,
                                                 task_id)
-                        # ret = g_task_profile.set_cur_task_profile(vm_ids[i], task_id, task_group_id)
                         if not ret:
                             logger.warn(
                                 "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
@@ -612,7 +612,7 @@ def init():
     global g_taskallot, g_logtask, g_task_profile, g_pc, g_user
     task.taskallot.logger = logger
     task.parallel.logger = logger
-    g_pc = ParallelControl(g_serverid, dbutil)
+    g_pc = ParallelControl(g_serverid, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, dbutil)
     g_logtask = LogTask(dbutil, logger)
     # g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
@@ -634,8 +634,8 @@ def main():
         if g_reset == 1:
             logger.info("reseting !!!")
             reset()
-        t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        t2.start()
+        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
+        # t2.start()
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         print("exit system,start to shut down all vm...")

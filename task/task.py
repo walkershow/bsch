@@ -17,6 +17,7 @@ import logging
 import logging.config
 sys.path.append("..")
 import dbutil
+import utils
 import action.action
 
 logger = None
@@ -50,7 +51,7 @@ class Task(object):
         cover_script_file:执行脚本路径文件名(任务脚本拷贝到这个路径含文件名)
         '''
         try:
-            filename = self.script_file.decode("utf-8").encode("gbk")
+            filename = utils.auto_encoding(self.script_file)
             #logger.info("allot script:%s", filename)
             print "allot script:", filename
             # shutil.copy(filename, cover_script_file)

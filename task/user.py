@@ -46,38 +46,51 @@ class UserAllot(object):
             times = res[0][0]
         return times
 
+    def get_max_day(self, task_group_id):
+        sql = '''select max(day) from vm_task_runtimes_config where
+        task_group_id=%d  ''' % (
+            task_group_id)
+        self.logger.debug(sql)
+        res = self.db.select_sql(sql)
+        if res:
+            return res[0][0]
+        return None
+
+    def is_task_inited(self, task_group_id):
+        sql_count = '''select 1 from vm_task_runtimes_config where
+        task_group_id=%d''' % (
+                    task_group_id)
+        self.logger.debug(sql_count)
+        res = self.db.select_sql(sql_count)
+        if res and len(res)>0:
+            return True
+        return False
+
+
     def runnable_statistic(self, task_group_id, day, times_one_day):
         '''1.判断该任务是否有数据,没有数据的话,返回可运行,起始时间0
            2.有数据,获取该任务组的最小和最大可运行时间
         '''
-        runnable = False
-        min_day, max_day = 0, 0
-        sql_count = "select count(1) from vm_task_runtimes_config where task_group_id=%d "\
-            "and day=%d" % (task_group_id, day)
-        self.logger.debug(sql_count)
-        res = self.db.select_sql(sql_count)
-        if res:
-            count = res[0][0]
-            if count == 0:
-                return True, day, None
-        print task_group_id, day, times_one_day
-        sql = "select min(day),max(day) from vm_task_runtimes_config where task_group_id=%d "\
-            "and users_used_amount<%s and remained=1 " % (
+        days = []
+        if not self.is_task_inited(task_group_id):
+            return True, min_day,max_day
+        sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
+            "and users_used_amount<%s order by day " % (
                 task_group_id, times_one_day)
         self.logger.debug(sql)
         res = self.db.select_sql(sql)
-        if res:
-            if res[0][0] is None:
-                min_day, max_day = 0, 0
-                self.reset_runtimes_config(task_group_id, times_one_day)
-                return False, 0, 0
-            else:
-                min_day = res[0][0]
-                max_day = res[0][1]
-            runnable = True
-        else:
+        if not res:
             self.reset_runtimes_config(task_group_id, times_one_day)
-        return runnable, min_day, max_day
+        for r in res:
+            days.append(r[0])
+        last_pos_day = days[-1]
+        max_day = self.get_max_day(task_group_id)
+        g_day = self.gone_days()
+        print max_day,g_day
+        if max_day < g_day:
+            for d in range(max_day+1, g_day+1):
+                days.append(d)
+        return days
 
     def log_used_out_time(self, task_group_id, day):
         sql = "update vm_task_runtimes_config set used_out_time = CURRENT_TIMESTAMP "\
@@ -128,6 +141,15 @@ class UserAllot(object):
         self.logger.info(sql)
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
+        
+    def decrease_allot_times(self, task_group_id, day):
+        sql = '''update vm_task_runtimes_config set
+        users_used_amount=users_used_amount-1 where task_group_id=%d and day=%d''' % (
+            task_group_id, day)
+        ret = self.db.execute_sql(sql)
+        self.logger.info(sql)
+        if ret < 0:
+            raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
 
     def set_remained(self, task_group_id, day):
         sql = "update vm_task_runtimes_config set remained=0 where task_group_id=%d and day=%d" % (
@@ -160,47 +182,41 @@ class UserAllot(object):
                 vm_id, task_id, task_group_id, None)
         s_info = str(self.server_id) + ":" + str(vm_id)
         times_one_day = self.runtimes_one_day()
-        day, max_day = 0, 0
-        runnable, day, max_day = self.runnable_statistic(
-            task_group_id, 1, times_one_day)
-        if max_day is None or max_day == 0:
-            g_days = self.gone_days()
-            day = g_days
-        else:
-            g_days = max_day
-        print "min_day:", day, "max_day:", max_day
-        print "gone_days:", g_days
-
-        if not runnable:
-            self.logger.warn(utils.auto_encoding("该任务组:%d没有可执行的用户名额"),
-                             task_group_id)
+        days = self.runnable_statistic(task_group_id,1,times_one_day)
+        print "runnable days:", days
+        if not days:
+            self.logger.warn(
+                utils.auto_encoding("该任务组:%d没有可执行的用户名额"), task_group_id)
             return False
-        while True:
-            if day > g_days:
-                self.logger.warn(utils.auto_encoding(
-                    'task_group_id:%d 已运行到最后一天的用户'), task_group_id)
-                return False
-            print day
+
+        for day in days:
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(
                     utils.auto_encoding("距离现在第%d天有可分配使用的用户名额"), day)
                 if not self.task_profile.set_cur_task_profile(
                         vm_id, task_id, task_group_id, day):
                     self.logger.warn(
-                        utils.auto_encoding("task_group_id:%d 距离现在第%d天无可分配使用的用户"), task_group_id, day)
-                    self.set_remained(task_group_id, day)
-                    day = day + 1
+                        utils.auto_encoding(
+                            "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
+                        task_group_id, day)
+                    #self.set_remained(task_group_id, day)
+                    self.logger.warn("release priv")
+                    self.decrease_allot_times(task_group_id,day)
                     continue
                 else:
                     self.logger.info(
-                        utils.auto_encoding("task_group_id:%d,day:%d 成功分配到执行用户"), task_group_id, day)
+                        utils.auto_encoding(
+                            "task_group_id:%d,day:%d 成功分配到执行用户"),
+                        task_group_id, day)
                     self.add_allot_succ_times(task_group_id, day)
                     return True
             else:
                 self.logger.warn(
                     utils.auto_encoding("该任务组:%d,第%d天的没有获取到执行用户名额"),
                     task_group_id, day)
-            day = day + 1
+                self.logger.warn("release priv")
+                self.decrease_allot_times(task_group_id,day)
+        return False
 
 
 def get_default_logger():
@@ -220,25 +236,25 @@ def get_default_logger():
 
 def test():
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm-test"
+    dbutil.db_name = "vm3"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"
     global logger
     logger = get_default_logger()
-    pc = ParallelControl(11, dbutil, logger)
-    user_allot = UserAllot(11, pc, dbutil, logger)
-    user_allot.allot_user(1, 1, 1)
+    pc = ParallelControl(15, dbutil, logger)
+    user_allot = UserAllot(15, pc, dbutil, logger)
+    user_allot.allot_user(1, 452, 452)
 
 
 if __name__ == '__main__':
     import threading
     t2 = threading.Thread(target=test, name="pause_thread")
     t2.start()
-    # t3 = threading.Thread(target=test, name="pause_thread")
-    # t3.start()
-    # t4 = threading.Thread(target=test, name="pause_thread")
-    # t4.start()
+    t3 = threading.Thread(target=test, name="pause_thread")
+    t3.start()
+    t4 = threading.Thread(target=test, name="pause_thread")
+    t4.start()
 
-    # t5 = threading.Thread(target=test, name="pause_thread")
-    # t5.start()
+    t5 = threading.Thread(target=test, name="pause_thread")
+    t5.start()
