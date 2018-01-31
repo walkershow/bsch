@@ -20,7 +20,7 @@ db_charset = "utf8"
 
 db_conn = None
 db_lasterrcode = 0
-
+autocommit = True
 t_lock = threading.Lock()
 ###############################################################################################
 def from_dbstr(dbstring, mem_charset="gbk"):
@@ -66,6 +66,11 @@ def close_connection():
 			logger.error('exception', exc_info = True)
 		db_conn = None
 
+def commit():
+    db_conn.commit()
+    
+def rollback():
+    db_conn.rollback()
 
 def select_sql(sql): 
 	''' result set: None--fail, empty[]--OK, no any data set, else[]--OK, has a data set '''
@@ -82,7 +87,8 @@ def select_sql(sql):
 		cursor.execute(sql)
 		ret = cursor.fetchall()
 		cursor.close()
-		db_conn.commit()
+                if autocommit:
+                    db_conn.commit()
 		t_lock.release()			
 		return ret
 	except Exception, e:
@@ -111,7 +117,8 @@ def select_sqlwithdict(sql):
 		cursor.execute(sql)
 		ret = cursor.fetchall()
 		cursor.close()
-		db_conn.commit()
+                if autocommit:
+                    db_conn.commit()
 		t_lock.release()			
 		return ret
 	except Exception, e:
@@ -142,7 +149,8 @@ def execute_sql(sql):
 		cursor = db_conn.cursor()
 		ret = cursor.execute(sql)
 		cursor.close()
-		db_conn.commit()
+                if autocommit:
+                    db_conn.commit()
 		# logger.info("ret=%d" % ret)
 		t_lock.release()			
 		return ret

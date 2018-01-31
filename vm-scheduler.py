@@ -15,7 +15,7 @@ import threading
 import signal
 import logging
 import logging.config
-import colorer  # for colored logger
+# import colorer  # for colored logger
 import dbutil
 from task.taskallot import TaskAllot
 import task.taskallot
@@ -325,6 +325,7 @@ def pause_resume_vm():
                             "status and last_status is 2 but it'nt notify vpn chagne 2"
                         )
                         last_status = 1
+                        dbutil.commit()
                         continue
                 elif last_status == 1 and status == 1:
                     if not is_vpn_1():
@@ -332,14 +333,18 @@ def pause_resume_vm():
                             "status and last_status is 1 but it'nt notify vpn chagne 1"
                         )
                         last_status = 2
+                        dbutil.commit()
                         continue
                 break
             # last_status = status
+            dbutil.commit()
             time.sleep(1)
         except:
             logger.error(
                 '[pasue_reusme_vm] exception on main_loop', exc_info=True)
+            dbutil.rollback()
             time.sleep(3)
+        dbutil.commit()
     logger.info("exit pause_resume_vm")
 
 
@@ -430,6 +435,7 @@ def main_loop():
     vm_names, vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1,2]
     # vm_names = ['w1', 'w2']
+    dbutil.autocommit = False
     while True:
         try:
             # if shutdown_by_flag():
@@ -456,12 +462,15 @@ def main_loop():
                                         没有可运行任务名额,只能跑零跑任务"),vm_ids[i]
                                         )
                             get_default = True
+                        dbutil.select_sql('''select * from vm_priv where id=1 for
+                                update''')
                         task_id, task_group_id, rid = g_taskallot.allot_by_priority(
                             vm_ids[i], get_default)
                         if task_id is None:
                             logger.warn(
                                 utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
                                 vm_ids[i])
+                            dbutil.commit()
                             time.sleep(5)
                             continue
                         ret = g_user.allot_user(vm_ids[i], task_group_id,
@@ -479,13 +488,14 @@ def main_loop():
                 else:
                     logger.info(utils.auto_encoding(
                         "当前虚拟机:%d,已分配任务或有正在执行的任务"), vm_ids[i])
-
+            dbutil.commit()
             time.sleep(2)
 
         except:
             logger.error('exception on main_loop', exc_info=True)
+            dbutil.rollback()
             time.sleep(3)
-            continue
+        dbutil.commit()
 
 
 def reset():
@@ -628,14 +638,24 @@ def init():
     return True
 
 
+def test():
+    # dbutil.autocommit(False)
+    dbutil.select_sql('''select * from vm_priv where id=1 for
+    update''',False)
+    dbutil.execute_sql("update vm_priv set priv=0 where id=1", False)
+    # dbutil.commit()
 def main():
     try:
         init()
         if g_reset == 1:
             logger.info("reseting !!!")
             reset()
-        t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        t2.start()
+        # while True:
+            # test()
+            # print "hihihi"
+            # time.sleep(5)
+        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
+        # t2.start(2
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         print("exit system,start to shut down all vm...")
@@ -645,7 +665,7 @@ def main():
         exit(0)
         # vms.shutdown_allvm(g_serverid)
         # logger.info("shutdown all vm done")
-
+    
 
 if __name__ == "__main__":
     main()
