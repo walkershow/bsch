@@ -54,7 +54,7 @@ class UserAllot(object):
         res = self.db.select_sql(sql)
         if res:
             return res[0][0]
-        return None
+        return 0
 
     def is_task_inited(self, task_group_id):
         sql_count = '''select 1 from vm_task_runtimes_config where
@@ -72,19 +72,19 @@ class UserAllot(object):
            2.有数据,获取该任务组的最小和最大可运行时间
         '''
         days = []
-        if not self.is_task_inited(task_group_id):
-            return True, min_day,max_day
-        sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
-            "and users_used_amount<%s order by day " % (
-                task_group_id, times_one_day)
-        self.logger.debug(sql)
-        res = self.db.select_sql(sql)
-        if not res:
-            self.reset_runtimes_config(task_group_id, times_one_day)
-        for r in res:
-            days.append(r[0])
-        last_pos_day = days[-1]
+        if self.is_task_inited(task_group_id):
+            sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
+                "and users_used_amount<%s order by day " % (
+                    task_group_id, times_one_day)
+            self.logger.debug(sql)
+            res = self.db.select_sql(sql)
+            if not res:
+                self.reset_runtimes_config(task_group_id, times_one_day)
+            for r in res:
+                days.append(r[0])
         max_day = self.get_max_day(task_group_id)
+        if max_day is None:
+            max_day = 0
         g_day = self.gone_days()
         print max_day,g_day
         if max_day < g_day:
@@ -245,16 +245,17 @@ def test():
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
     user_allot.allot_user(1, 452, 452)
+    # user_allot.allot_user(1, 464, 464)
 
 
 if __name__ == '__main__':
     import threading
     t2 = threading.Thread(target=test, name="pause_thread")
     t2.start()
-    t3 = threading.Thread(target=test, name="pause_thread")
-    t3.start()
-    t4 = threading.Thread(target=test, name="pause_thread")
-    t4.start()
+    # t3 = threading.Thread(target=test, name="pause_thread")
+    # t3.start()
+    # t4 = threading.Thread(target=test, name="pause_thread")
+    # t4.start()
 
-    t5 = threading.Thread(target=test, name="pause_thread")
-    t5.start()
+    # t5 = threading.Thread(target=test, name="pause_thread")
+    # t5.start()

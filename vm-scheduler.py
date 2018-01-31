@@ -15,7 +15,7 @@ import threading
 import signal
 import logging
 import logging.config
-# import colorer  # for colored logger
+import colorer  # for colored logger
 import dbutil
 from task.taskallot import TaskAllot
 import task.taskallot
@@ -634,8 +634,8 @@ def main():
         if g_reset == 1:
             logger.info("reseting !!!")
             reset()
-        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        # t2.start()
+        t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
+        t2.start()
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         print("exit system,start to shut down all vm...")
