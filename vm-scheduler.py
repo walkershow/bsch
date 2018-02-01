@@ -152,12 +152,6 @@ def can_take_task():
     return False
 
 
-def release_priv():
-    sql = "update vm_priv set priv=0 where id=1"
-    ret = dbutil.execute_sql(sql)
-    logger.warn(utils.auto_encoding("释放操作权限"))
-    if ret < 0:
-        raise Exception, "%s excute error;ret:%d" % (sql, ret)
 
 
 def main_loop():
@@ -169,7 +163,6 @@ def main_loop():
     vm_names, vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1,2]
     # vm_names = ['w1', 'w2']
-    # dbutil.autocommit = False
     while True:
         try:
             # if shutdown_by_flag():
@@ -196,43 +189,21 @@ def main_loop():
                                 utils.auto_encoding("vm:%d\
                                         没有可运行任务名额,只能跑零跑任务"), vm_ids[i])
                             get_default = True
-                        res = dbutil.select_sql('call return_priv()')
-                        priv = res[0][0]
-                        if priv != 1:
-                            logger.warn(utils.auto_encoding("未获得操作权限"))
-                            time.sleep(1)
-                            continue
                         logger.error(
                             utils.auto_encoding("==========进入任务分配=========="))
                         # dbutil.select_sql('''select * from vm_priv where id=1 for
                         # update''')
-                        task_id, task_group_id, rid = g_taskallot.allot_by_priority(
-                            vm_ids[i], get_default)
-                        if task_id is None:
+                        ret = g_taskallot.allot_by_priority( vm_ids[i], get_default)
+                        if not ret:
+                        # if task_id is None:
                             logger.warn(
                                 utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
                                 vm_ids[i])
                             logger.error(
                                 utils.auto_encoding(
                                     "==========进入任务分配结束=========="))
-                            release_priv()
-                            # dbutil.commit()
                             time.sleep(5)
                             continue
-                        # release_priv()
-                        ret = g_user.allot_user(vm_ids[i], task_group_id,
-                                                task_id)
-                        if not ret:
-                            logger.warn(
-                                "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
-                                vm_ids[i], task_id, task_group_id)
-                        else:
-                            g_taskallot.add_ran_times(task_id, task_group_id,
-                                                      rid)
-                            logger.error(
-                                utils.auto_encoding(
-                                    "==========进入任务分配结束=========="))
-                            # dbutil.commit()
                     else:
                         logger.warn(
                             utils.auto_encoding("虚拟机:%d 当前运行任务数:%d>=4"),
@@ -242,8 +213,6 @@ def main_loop():
                         utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
                         vm_ids[i])
             logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
-            release_priv()
-            # dbutil.commit()
             time.sleep(2)
 
         except:
@@ -251,7 +220,6 @@ def main_loop():
             dbutil.rollback()
             time.sleep(3)
         logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
-        dbutil.commit()
 
 
 def reset():
