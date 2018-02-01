@@ -15,6 +15,7 @@ from taskgroup import TaskGroup
 import dbutil
 from task import TaskError
 from parallel import ParallelControl
+from user import  UserAllot
 sys.path.append("..")
 
 logger = None
@@ -27,13 +28,14 @@ class TaskAllotError(Exception):
 class TaskAllot(object):
     '''任务分配'''
 
-    def __init__(self, want_init, server_id, pc, db):
+    def __init__(self, want_init, server_id, pc, user, db):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
         self.server_id = server_id
         self.selected_ids = []
         self.pc = pc
+        self.user = user
 
     def log_task_id(self, id, task_id):
         sql = "update vm_allot_task set cur_task_id=%d where id=%d" % (task_id,
@@ -98,6 +100,7 @@ class TaskAllot(object):
         return '1970-1-1 00:00:00'
 
     def right_to_allot(self, task_group_id):
+        return True
         succ_time = self.vm_last_succ_time(task_group_id)
         if succ_time is None:
             succ_time = '1970-1-1 00:00:00'
@@ -160,7 +163,7 @@ class TaskAllot(object):
                         and b.priority>0
                         AND f.server_id = %d order by b.priority''' % (
                 self.server_id)
-
+            logger.info(sql)
             res = self.db.select_sql(sql)
             ids = set()
             for r in res:
@@ -231,6 +234,11 @@ class TaskAllot(object):
                 if not task:
                     logger.warn("no default task to run")
                     return None, None, None
+                ret = self.user.allot_user(vm_id, task_group_id, task_id)
+                if not ret:
+                    logger.warn(
+                    "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
+                    vm_ids[i], task_id, task_group_id)
                 # print task
                 task.allot2()
             else:
@@ -245,6 +253,12 @@ class TaskAllot(object):
         if not task:
             return None
         task.allot2()
+        ret = g_user.allot_user(vm_ids[i], task_group_id,
+        task_id)
+        if not ret:
+        logger.warn(
+        "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
+        vm_ids[i], task_id, task_group_id)
 
         return task
 
@@ -259,15 +273,15 @@ class TaskAllot(object):
     def add_ran_times(self, task_id, task_group_id, rid):
         ''' 分配成功后有可用profile 时计数
         '''
+        tg = TaskGroup(task_group_id, self.db)
         if task_group_id == 0:
-            tg = TaskGroup(task_group_id, self.db)
             tg.add_ran_times(task_id)
             self.add_zero_limit_times(rid)
             # TaskGroup.add_default_ran_times(self.db)
         #成功时才技术,放在ad_stat接口了
-        # else:
+        else:
         #     tg.add_ran_times(task_id)
-        #     tg.add_impl_ran_times(task_id)
+            tg.add_impl_ran_times(task_id)
 
 
 def allot_test(dbutil):

@@ -67,10 +67,14 @@ def close_connection():
 		db_conn = None
 
 def commit():
+    t_lock.acquire()
     db_conn.commit()
+    t_lock.release()
     
 def rollback():
+    t_lock.acquire()
     db_conn.rollback()
+    t_lock.release()
 
 def select_sql(sql): 
 	''' result set: None--fail, empty[]--OK, no any data set, else[]--OK, has a data set '''
@@ -210,7 +214,6 @@ class DBUtil:
 	def select_sql(self, sql, cursorClass = 'Cursor'): 
 		''' result set: None--fail, empty[]--OK, no any data set, else[]--OK, has a data set '''
 
-		self._logger.info(sql)
 		if self._conn is None:
 			self.create_connection()
 		if self._conn is None:
@@ -239,7 +242,6 @@ class DBUtil:
 		''' -1--connect fail, -2--execute exception, 
 			0--execute OK, but no effect, >0--execute OK, effect rows '''
 
-		self._logger.info(sql)
 		if self._conn is None:
 			self.create_connection()
 		if self._conn is None:

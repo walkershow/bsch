@@ -34,7 +34,7 @@ class TaskProfile(object):
         sql = "select type,user_type,terminal_type from vm_task where id=%d "%(task_id)
         res = self.db.select_sql(sql)
         if not res:
-            return None,None
+            return None,None,None
         return res[0][0],res[0][1],res[0][2]
 
     def get_reenable_day(self, task_type):

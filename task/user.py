@@ -65,9 +65,23 @@ class UserAllot(object):
         if res and len(res)>0:
             return True
         return False
+    
+    def useable_profiles(self, day, task_id):
+        ty, uty, tty= self.task_profile.get_task_type(task_id)   
+        if ty is None:
+            return False
+        sql = '''select count(1) from vm_users where
+        TIMESTAMPDIFF(DAY,create_time,now()) = %d and user_type=%d and
+        terminal_type = %d'''%(day, uty, tty)
+        self.logger.info(sql)
+        res = self.db.select_sql(sql)
+        count = res[0][0]
+        if count>0:
+            return True 
+        return False
 
 
-    def runnable_statistic(self, task_group_id, day, times_one_day):
+    def runnable_statistic(self, task_group_id,task_id, day, times_one_day):
         '''1.判断该任务是否有数据,没有数据的话,返回可运行,起始时间0
            2.有数据,获取该任务组的最小和最大可运行时间
         '''
@@ -76,12 +90,13 @@ class UserAllot(object):
             sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
                 "and users_used_amount<%s order by day " % (
                     task_group_id, times_one_day)
-            self.logger.debug(sql)
+            self.logger.info(sql)
             res = self.db.select_sql(sql)
             if not res:
                 self.reset_runtimes_config(task_group_id, times_one_day)
             for r in res:
-                days.append(r[0])
+                if self.useable_profiles(r[0], task_id):
+                    days.append(r[0])
         max_day = self.get_max_day(task_group_id)
         if max_day is None:
             max_day = 0
@@ -89,7 +104,8 @@ class UserAllot(object):
         print max_day,g_day
         if max_day < g_day:
             for d in range(max_day+1, g_day+1):
-                days.append(d)
+                if self.useable_profiles(d, task_id):
+                    days.append(d)
         return days
 
     def log_used_out_time(self, task_group_id, day):
@@ -151,16 +167,10 @@ class UserAllot(object):
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
 
-    def set_remained(self, task_group_id, day):
-        sql = "update vm_task_runtimes_config set remained=0 where task_group_id=%d and day=%d" % (
-            task_group_id, day)
-        ret = self.db.execute_sql(sql)
-        self.logger.info(sql)
-        if ret < 0:
-            raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
 
     def set_s_info(self, task_group_id, day, s_info):
-        sql = "update vm_task_runtimes_config set allocated_server=CONCAT_WS(',','%s',allocated_server) where task_group_id=%d and day=%d"
+        # sql = "update vm_task_runtimes_config set allocated_server=CONCAT_WS(',','%s',allocated_server) where task_group_id=%d and day=%d"
+        sql = "update vm_task_runtimes_config set allocated_server='%s' where task_group_id=%d and day=%d"
         sql_tmp = sql % (s_info, task_group_id, day)
         self.logger.error(sql_tmp)
         ret = self.db.execute_sql(sql_tmp)
@@ -182,7 +192,7 @@ class UserAllot(object):
                 vm_id, task_id, task_group_id, None)
         s_info = str(self.server_id) + ":" + str(vm_id)
         times_one_day = self.runtimes_one_day()
-        days = self.runnable_statistic(task_group_id,1,times_one_day)
+        days = self.runnable_statistic(task_group_id,task_id,1,times_one_day)
         print "runnable days:", days
         if not days:
             self.logger.warn(
