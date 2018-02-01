@@ -347,10 +347,10 @@ def init():
     task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
-    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, dbutil)
+    g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
+    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user, dbutil)
     g_logtask = LogTask(dbutil, logger)
     # g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
-    g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
     global g_manvm
     g_manvm = CManVM(g_serverid, logger, options.db_ip, 3306, "vm3",
                      options.username, options.password)
