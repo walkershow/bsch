@@ -11,9 +11,9 @@ import sys
 import logging
 import logging.config
 sys.path.append("..")
-import dbutil
 from task_profiles import TaskProfile
 from parallel import ParallelControl
+import dbutil
 import utils
 
 
@@ -24,11 +24,13 @@ class UserAllotError(Exception):
 class UserAllot(object):
     '''用户分配'''
 
-    def __init__(self, server_id, pc, db, logger):
+    def __init__(self, server_id, pc, db, logger, use_cache=True):
         self.db = db
         self.server_id = server_id
         self.logger = logger
         self.task_profile = TaskProfile(server_id, db, pc, logger)
+        self.unavail_day = {}
+        self.use_cache = use_cache
 
     def gone_days(self):
         days = 0
@@ -95,8 +97,8 @@ class UserAllot(object):
             if not res:
                 self.reset_runtimes_config(task_group_id, times_one_day)
             for r in res:
-                if self.useable_profiles(r[0], task_id):
-                    days.append(r[0])
+                # if self.useable_profiles(r[0], task_id):
+                days.append(r[0])
         max_day = self.get_max_day(task_group_id)
         if max_day is None:
             max_day = 0
@@ -186,6 +188,9 @@ class UserAllot(object):
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
 
+    def clear_cache(self):
+        self.unavail_day = {}
+
     def allot_user(self, vm_id, task_group_id, task_id):
         if task_group_id == 0:
             return self.task_profile.set_cur_task_profile(
@@ -200,6 +205,13 @@ class UserAllot(object):
             return False
 
         for day in days:
+        
+            if not self.unavail_day.has_key(vm_id):
+                self.unavail_day[vm_id] = set()
+            if day in self.unavail_day[vm_id]:
+                logger.info("vm_id:%d , %d day 无可用分配使用的用户或名额",
+                        vm_id, day)
+                continue
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(
                     utils.auto_encoding("距离现在第%d天有可分配使用的用户名额"), day)
@@ -210,6 +222,9 @@ class UserAllot(object):
                             "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
                         task_group_id, day)
                     #self.set_remained(task_group_id, day)
+                    if self.use_cache:
+                        self.unavail_day[vm_id].add(day)
+
                     self.logger.warn("release priv")
                     self.decrease_allot_times(task_group_id,day)
                     continue
@@ -224,6 +239,8 @@ class UserAllot(object):
                 self.logger.warn(
                     utils.auto_encoding("该任务组:%d,第%d天的没有获取到执行用户名额"),
                     task_group_id, day)
+                if self.use_cache:
+                    self.unavail_day[vm_id].add(day)
                 self.logger.warn("release priv")
                 self.decrease_allot_times(task_group_id,day)
         return False
@@ -254,8 +271,9 @@ def test():
     logger = get_default_logger()
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
-    user_allot.allot_user(1, 452, 452)
-    # user_allot.allot_user(1, 464, 464)
+    # user_allot.allot_user(1, 452, 452)
+    for i in range(0,8):
+        user_allot.allot_user(1, 464, 464)
 
 
 if __name__ == '__main__':

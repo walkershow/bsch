@@ -13,9 +13,9 @@ import logging
 import logging.config
 from taskgroup import TaskGroup
 import dbutil
+import utils
 from task import TaskError
 from parallel import ParallelControl
-from user import  UserAllot
 sys.path.append("..")
 
 logger = None
@@ -49,16 +49,18 @@ class TaskAllot(object):
         today = datetime.date.today()
         print today, self.cur_date
         if today != self.cur_date:
+            self.user.clear_cache()
+            self.cur_date = today
 
-            #统一到一个w = 1的进程进行更新
-            if self.want_init == 1:
-                print "start new day to reinit..."
-                #logger.info("start new day to reinit...")
-                TaskGroup.reset_rantimes_today(self.db)
-                TaskGroup.reset_rantimes_allot_impl(self.db)
-                self.cur_date = today
-                print "cur_date", self.cur_date
-                print "end new day to reinit..."
+            # #统一到一个w = 1的进程进行更新
+            # if self.want_init == 1:
+                # print "start new day to reinit..."
+                # #logger.info("start new day to reinit...")
+                # TaskGroup.reset_rantimes_today(self.db)
+                # TaskGroup.reset_rantimes_allot_impl(self.db)
+                # self.cur_date = today
+                # print "cur_date", self.cur_date
+                # print "end new day to reinit..."
                 #logger.info("end new day to reinit...")
 
     def get_band_run_groupids(self):
@@ -132,9 +134,12 @@ class TaskAllot(object):
     def acquired_allot_priv(self):
         res = dbutil.select_sql('call return_priv()')
         priv = res[0][0]
+        print "get priv:", priv
         if priv != 1:
-            logger.debug(utils.auto_encoding("未获得操作权限"))
+            logger.info(utils.auto_encoding("未获得操作权限"))
+            self.release_allot_priv()
             return False
+        logger.info(utils.auto_encoding("==========获得操作权限=========="))
         return True
 
     def release_allot_priv(self):
@@ -150,49 +155,45 @@ class TaskAllot(object):
             type_str = ">"
         else:
             type_str = "="
+        sql = '''SELECT
+                        a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.priority %s 0
+                    AND f.server_id = %d ''' % (
+            type_str, self.server_id)
+        if type == 0:
+            sql = sql + " order by b.priority"
+        logger.info(sql)
+        res = self.db.select_sql(sql)
+        ids = set()
+        for r in res:
+            ids.add(r[0])
+        rid_set = self.get_band_run_groupids()
+        band_str = ",".join(str(s) for s in rid_set)
+        logger.info("band task_group_id:%s", band_str)
 
-        try:
-            sql = '''SELECT
-                            a.id
-                        FROM
-                            vm_task_group b,
-                            vm_task_allot_impl a,
-                            vm_allot_task_by_servergroup c,
-                            vm_task d,
-                            vm_server_group f
-                        WHERE
-                            b.id = a.id
-                        AND b.task_id = a.task_id
-                        AND d.id = b.task_id
-                        AND d. STATUS = 1
-                        AND f.id = c.server_group_id
-                        and f.status =1
-                        AND c.task_group_id = b.id
-                        AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
-                        AND time_to_sec(a.end_time)
-                        AND a.ran_times < a.allot_times
-                        AND b.id > 0
-                        AND c.task_group_id = a.id
-                        and b.priority %s 0
-                        AND f.server_id = %d ''' % (
-                type_str, self.server_id)
-            if type == 0:
-                sql = sql + " order by b.priority"
-            logger.info(sql)
-            res = self.db.select_sql(sql)
-            ids = set()
-            for r in res:
-                ids.add(r[0])
-            rid_set = self.get_band_run_groupids()
-            band_str = ",".join(str(s) for s in rid_set)
-            logger.info("band task_group_id:%s", band_str)
-
-            self.selected_ids = list(set(ids) - rid_set)
-            print self.selected_ids
-            gid = self.get_valid_gid(get_default)
-            return gid
-        except TaskError, t:
-            raise TaskAllotError, "excute error:%s" % (t.message)
+        self.selected_ids = list(set(ids) - rid_set)
+        print self.selected_ids
+        gid = self.get_valid_gid(get_default)
+        return gid
 
 
     def allot_by_default(self, vm_id):
@@ -200,11 +201,11 @@ class TaskAllot(object):
         if not task:
             logger.warn("no default task to run")
             return None
-        ret = g_user.allot_user(vm_id, 0, task.id)
+        ret = self.user.allot_user(vm_id, 0, task.id)
         if not ret:
             logger.warn(
             "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
-            vm_id, task.id, task_group_id)
+            vm_id, task.id, 0)
             return None
         return task
 
@@ -213,7 +214,7 @@ class TaskAllot(object):
             if not self.acquired_allot_priv():
                 return False
             task = None
-            # self.reset_when_newday()
+            self.reset_when_newday()
             if self.selected_ids:
                 self.release_allot_priv()
                 gid = self.get_valid_gid(get_default)
@@ -248,17 +249,17 @@ class TaskAllot(object):
     def allot_by_rand(self, vm_id, get_default):
         try:
             task_group_id = self.allot_by_type(vm_id, get_default, 1)
-            if task_group_id == 0:
             return task_group_id
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
+            return None
 
     def handle_taskgroup(self, task_group_id, vm_id):
         tg = TaskGroup(task_group_id, self.db)
         task = tg.choose_vaild_task(self.server_id, vm_id)
         if not task:
             return None
-        ret = g_user.allot_user(vm_id, task_group_id, task.id)
+        ret = self.user.allot_user(vm_id, task_group_id, task.id)
         if not ret:
             logger.warn(
             "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
