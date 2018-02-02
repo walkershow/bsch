@@ -45,13 +45,12 @@ class UserAllot(object):
         sql = "select value from vm_sys_dict where `key` = 'runtimes_one_day'"
         res = self.db.select_sql(sql)
         if res:
-            times = res[0][0]
+            times = int(res[0][0])
         return times
 
     def get_max_day(self, task_group_id):
         sql = '''select max(day) from vm_task_runtimes_config where
-        task_group_id=%d  ''' % (
-            task_group_id)
+        task_group_id=%d  ''' % (task_group_id)
         self.logger.debug(sql)
         res = self.db.select_sql(sql)
         if res:
@@ -60,30 +59,28 @@ class UserAllot(object):
 
     def is_task_inited(self, task_group_id):
         sql_count = '''select 1 from vm_task_runtimes_config where
-        task_group_id=%d''' % (
-                    task_group_id)
+        task_group_id=%d''' % (task_group_id)
         self.logger.debug(sql_count)
         res = self.db.select_sql(sql_count)
-        if res and len(res)>0:
+        if res and len(res) > 0:
             return True
         return False
-    
+
     def useable_profiles(self, day, task_id):
-        ty, uty, tty= self.task_profile.get_task_type(task_id)   
+        ty, uty, tty = self.task_profile.get_task_type(task_id)
         if ty is None:
             return False
         sql = '''select count(1) from vm_users where
         TIMESTAMPDIFF(DAY,create_time,now()) = %d and user_type=%d and
-        terminal_type = %d'''%(day, uty, tty)
+        terminal_type = %d''' % (day, uty, tty)
         self.logger.info(sql)
         res = self.db.select_sql(sql)
         count = res[0][0]
-        if count>0:
-            return True 
+        if count > 0:
+            return True
         return False
 
-
-    def runnable_statistic(self, task_group_id,task_id, day, times_one_day):
+    def runnable_statistic(self, task_group_id, task_id, day, times_one_day):
         '''1.判断该任务是否有数据,没有数据的话,返回可运行,起始时间0
            2.有数据,获取该任务组的最小和最大可运行时间
         '''
@@ -103,9 +100,9 @@ class UserAllot(object):
         if max_day is None:
             max_day = 0
         g_day = self.gone_days()
-        print max_day,g_day
+        print max_day, g_day
         if max_day < g_day:
-            for d in range(max_day+1, g_day+1):
+            for d in range(max_day + 1, g_day + 1):
                 if self.useable_profiles(d, task_id):
                     days.append(d)
         return days
@@ -159,7 +156,7 @@ class UserAllot(object):
         self.logger.info(sql)
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
-        
+
     def decrease_allot_times(self, task_group_id, day):
         sql = '''update vm_task_runtimes_config set
         users_used_amount=users_used_amount-1 where task_group_id=%d and day=%d''' % (
@@ -168,7 +165,6 @@ class UserAllot(object):
         self.logger.info(sql)
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
-
 
     def set_s_info(self, task_group_id, day, s_info):
         # sql = "update vm_task_runtimes_config set allocated_server=CONCAT_WS(',','%s',allocated_server) where task_group_id=%d and day=%d"
@@ -188,16 +184,22 @@ class UserAllot(object):
         if ret < 0:
             raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
 
+    def set_use_cache(self, flag):
+        self.use_cache = flag
+
     def clear_cache(self):
         self.unavail_day = {}
 
     def allot_user(self, vm_id, task_group_id, task_id):
+        if not self.use_cache:
+            self.clear_cache()
         if task_group_id == 0:
             return self.task_profile.set_cur_task_profile(
                 vm_id, task_id, task_group_id, None)
         s_info = str(self.server_id) + ":" + str(vm_id)
         times_one_day = self.runtimes_one_day()
-        days = self.runnable_statistic(task_group_id,task_id,1,times_one_day)
+        days = self.runnable_statistic(task_group_id, task_id, 1,
+                                       times_one_day)
         print "runnable days:", days
         if not days:
             self.logger.warn(
@@ -205,12 +207,10 @@ class UserAllot(object):
             return False
 
         for day in days:
-        
             if not self.unavail_day.has_key(vm_id):
                 self.unavail_day[vm_id] = set()
             if day in self.unavail_day[vm_id]:
-                self.logger.info("vm_id:%d , %d day 无可用分配使用的用户或名额",
-                        vm_id, day)
+                self.logger.info("vm_id:%d , %d day 无可用分配使用的用户或名额", vm_id, day)
                 continue
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(
@@ -226,7 +226,7 @@ class UserAllot(object):
                         self.unavail_day[vm_id].add(day)
 
                     self.logger.warn("release priv")
-                    self.decrease_allot_times(task_group_id,day)
+                    self.decrease_allot_times(task_group_id, day)
                     continue
                 else:
                     self.logger.info(
@@ -242,7 +242,7 @@ class UserAllot(object):
                 if self.use_cache:
                     self.unavail_day[vm_id].add(day)
                 self.logger.warn("release priv")
-                self.decrease_allot_times(task_group_id,day)
+                self.decrease_allot_times(task_group_id, day)
         return False
 
 
@@ -272,7 +272,7 @@ def test():
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
     # user_allot.allot_user(1, 452, 452)
-    for i in range(0,8):
+    for i in range(0, 8):
         user_allot.allot_user(1, 464, 464)
 
 

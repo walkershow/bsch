@@ -32,25 +32,26 @@ global g_current_dir
 global g_reset
 global g_origin_limit
 from dbutil import DBUtil  # use when multi db connection needed
-g_serverid = 0
-g_rto = 0
-g_rto_tmp = 0
-g_dsp = ""
-g_taskallot = None
-g_logtask = None
-g_task_profile = None
-g_cur_date = datetime.date.today()
+
+g_serverid           = 0
+g_rto                = 0
+g_rto_tmp            = 0
+g_dsp                = ""
+g_taskallot          = None
+g_logtask            = None
+g_task_profile       = None
+g_cur_date           = datetime.date.today()
 g_last_shutdown_time = None
-g_start_idx = 0
-g_vpn_db = None
-vm_names = []
-vm_ids = []
-g_reset_waittime = 120
-g_pb = 4
-g_pc = None
-exit_flag = False
-g_user = None
-g_manvm = None
+g_start_idx          = 0
+g_vpn_db             = None
+vm_names             = []
+vm_ids               = []
+g_reset_waittime     = 120
+g_pb                 = 4
+g_pc                 = None
+exit_flag            = False
+g_user               = None
+g_manvm              = None
 
 
 def get_cur_hour():
@@ -85,6 +86,17 @@ def get_shutdown_time():
         return None
     time_list = res[0][0].split(',')
     return time_list
+
+
+def is_use_cache():
+    sql = "select `value` from vm_sys_dict where `key`='use_cache'"
+    res = dbutil.select_sql(sql)
+    if not res:
+        return False
+    uc = int(res[0][0])
+    if uc == 1:
+        return True
+    return False
 
 
 def reset_vms_oneday():
@@ -141,8 +153,10 @@ def shutdown_by_flag():
 
 
 def can_take_task():
+    times_one_day = g_user.runtimes_one_day()
     sql = "select count(1) from vm_task_runtimes_config where "\
-        " date(used_out_time) != current_date"
+        " date(used_out_time) != current_date and users_used_amount<%d" % (
+                times_one_day)
     logger.debug(sql)
     res = dbutil.select_sql(sql)
     if res:
@@ -150,8 +164,6 @@ def can_take_task():
         if count:
             return True
     return False
-
-
 
 
 def main_loop():
@@ -170,6 +182,8 @@ def main_loop():
             #     os._exit(0)
             #     break
             # reset_vms_oneday()
+            b_uc = is_use_cache()
+            g_user.set_use_cache(b_uc)
             for i in range(0, len(vm_ids)):
                 sqltmp = sql % (g_serverid, vm_ids[i])
                 # print sqltmp
@@ -193,9 +207,10 @@ def main_loop():
                             utils.auto_encoding("==========进入任务分配=========="))
                         # dbutil.select_sql('''select * from vm_priv where id=1 for
                         # update''')
-                        ret = g_taskallot.allot_by_priority( vm_ids[i], get_default)
+                        ret = g_taskallot.allot_by_priority(
+                            vm_ids[i], get_default)
                         if not ret:
-                        # if task_id is None:
+                            # if task_id is None:
                             logger.warn(
                                 utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
                                 vm_ids[i])
