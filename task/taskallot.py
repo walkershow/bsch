@@ -135,7 +135,9 @@ class TaskAllot(object):
         res = dbutil.select_sql('call return_priv()')
         priv = res[0][0]
         print "get priv:", priv
-        if priv != 1:
+        if priv !=1:
+            logger.info("the priv is:%d", priv)
+        if priv > 1:
             logger.info(utils.auto_encoding("未获得操作权限"))
             self.release_allot_priv()
             return False
@@ -214,45 +216,43 @@ class TaskAllot(object):
             if not self.acquired_allot_priv():
                 return False
             task = None
+            gid = None
             self.reset_when_newday()
             if self.selected_ids:
-                self.release_allot_priv()
                 gid = self.get_valid_gid(get_default)
                 task = self.handle_taskgroup(gid, vm_id)
                 if task is None:
+                    self.release_allot_priv()
                     return False
-            # priority
-            gid = self.allot_by_type(vm_id, get_default, 0)
-
-            if gid == 0:
-                #不存在优先级高的任务组,执行随机分配
-                logger.info("no priority task, get rand taskgroup")
-                gid = self.allot_by_rand(vm_id, get_default)
-            self.release_allot_priv()
-
-            if gid == 0:
-                logger.warn("no else task to run,find default taskgroup")
-                task = self.allot_by_default(vm_id)
             else:
-                task = self.handle_taskgroup(gid, vm_id)
-                if task is None:
+                # priority
+                gid = self.allot_by_type(vm_id, get_default, 0)
+
+                if gid == 0:
+                    #不存在优先级高的任务组,执行随机分配
+                    logger.info("no priority task, get rand taskgroup")
+                    gid = self.allot_by_rand(vm_id, get_default)
+
+                if gid == 0:
+                    logger.warn("no else task to run,find default taskgroup")
                     task = self.allot_by_default(vm_id)
-                    # self.release_allot_priv()
+                else:
+                    task = self.handle_taskgroup(gid, vm_id)
+                    if task is None:
+                        task = self.allot_by_default(vm_id)
             if task is None:
+                self.release_allot_priv()
                 return False
             self.add_ran_times(task.id, gid, task.rid)
-            # self.release_allot_priv()
+            self.release_allot_priv()
             return True
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
+            return False
 
     def allot_by_rand(self, vm_id, get_default):
-        try:
-            task_group_id = self.allot_by_type(vm_id, get_default, 1)
-            return task_group_id
-        except TaskError, t:
-            raise TaskAllotError, "excute error:%s" % (t.message)
-            return None
+        task_group_id = self.allot_by_type(vm_id, get_default, 1)
+        return task_group_id
 
     def handle_taskgroup(self, task_group_id, vm_id):
         tg = TaskGroup(task_group_id, self.db)
