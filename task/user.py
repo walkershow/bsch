@@ -210,7 +210,8 @@ class UserAllot(object):
             if not self.unavail_day.has_key(vm_id):
                 self.unavail_day[vm_id] = set()
             if day in self.unavail_day[vm_id]:
-                self.logger.info("vm_id:%d , %d day 无可用分配使用的用户或名额", vm_id, day)
+                self.logger.info(utils.auto_encoding("vm_id:%d , %d day"\
+                            "无可用分配使用的用户或名额", vm_id, day))
                 continue
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(
