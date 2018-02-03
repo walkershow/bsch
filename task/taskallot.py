@@ -102,7 +102,7 @@ class TaskAllot(object):
         return '1970-1-1 00:00:00'
 
     def right_to_allot(self, task_group_id):
-        return True
+        #return True
         succ_time = self.vm_last_succ_time(task_group_id)
         if succ_time is None:
             succ_time = '1970-1-1 00:00:00'
@@ -145,7 +145,7 @@ class TaskAllot(object):
         return True
 
     def release_allot_priv(self):
-        sql = "update vm_priv set priv=0 where id=1"
+        sql = "update vm_priv set priv=priv-1 where id=1"
         ret = dbutil.execute_sql(sql)
         logger.warn(utils.auto_encoding("释放操作权限"))
         if ret < 0:
@@ -213,6 +213,10 @@ class TaskAllot(object):
 
     def allot_by_priority(self, vm_id, get_default):
         try:
+            if get_default:
+                task = self.allot_by_default(vm_id)
+                self.add_ran_times(task.id, 0, task.rid)
+                return True
             if not self.acquired_allot_priv():
                 return False
             task = None
@@ -240,6 +244,7 @@ class TaskAllot(object):
                     task = self.handle_taskgroup(gid, vm_id)
                     if task is None:
                         task = self.allot_by_default(vm_id)
+                        gid = 0
             if task is None:
                 self.release_allot_priv()
                 return False
@@ -271,7 +276,7 @@ class TaskAllot(object):
     def add_zero_limit_times(self, id):
         sql = "update zero_schedule_list set ran_times=ran_times+1 where id=%d" % (
             id)
-        print sql
+        logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise Exception, "%s excute error;ret:%d" % (sql, ret)
@@ -279,8 +284,10 @@ class TaskAllot(object):
     def add_ran_times(self, task_id, task_group_id, rid):
         ''' 分配成功后有可用profile 时计数
         '''
+        print "add_ran_times"
         tg = TaskGroup(task_group_id, self.db)
         if task_group_id == 0:
+            print "task_group_id is 0"
             tg.add_ran_times(task_id)
             self.add_zero_limit_times(rid)
             # TaskGroup.add_default_ran_times(self.db)
