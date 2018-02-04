@@ -36,6 +36,7 @@ class TaskAllot(object):
         self.selected_ids = []
         self.pc = pc
         self.user = user
+        self.lock = utils.Lock("/tmp/lock-sched.lock")
 
     def log_task_id(self, id, task_id):
         sql = "update vm_allot_task set cur_task_id=%d where id=%d" % (task_id,
@@ -132,24 +133,11 @@ class TaskAllot(object):
         return 0
 
     def acquired_allot_priv(self):
-        res = dbutil.select_sql('call return_priv()')
-        priv = res[0][0]
-        print "get priv:", priv
-        if priv !=1:
-            logger.info("the priv is:%d", priv)
-        if priv > 1:
-            logger.info(utils.auto_encoding("未获得操作权限"))
-            self.release_allot_priv()
-            return False
-        logger.info(utils.auto_encoding("==========获得操作权限=========="))
-        return True
+        self.lock.acquire()
+
 
     def release_allot_priv(self):
-        sql = "update vm_priv set priv=priv-1 where id=1"
-        ret = dbutil.execute_sql(sql)
-        logger.warn(utils.auto_encoding("释放操作权限"))
-        if ret < 0:
-            raise Exception, "%s excute error;ret:%d" % (sql, ret)
+        self.lock.release()
         
     def allot_by_type(self, vm_id, get_default, type):
         type_str = ">"
@@ -217,8 +205,7 @@ class TaskAllot(object):
                 task = self.allot_by_default(vm_id)
                 self.add_ran_times(task.id, 0, task.rid)
                 return True
-            if not self.acquired_allot_priv():
-                return False
+            self.acquired_allot_priv()
             task = None
             gid = None
             self.reset_when_newday()
@@ -253,7 +240,9 @@ class TaskAllot(object):
             return True
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
+            self.release_allot_priv()
             return False
+
 
     def allot_by_rand(self, vm_id, get_default):
         task_group_id = self.allot_by_type(vm_id, get_default, 1)
