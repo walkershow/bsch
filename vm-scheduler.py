@@ -153,11 +153,15 @@ def shutdown_by_flag():
 
 
 def can_take_task():
-    times_one_day = g_user.runtimes_one_day()
-    sql = "select count(1) from vm_task_runtimes_config where "\
-        " date(used_out_time) != current_date and users_used_amount<%d" % (
-                times_one_day)
-    logger.debug(sql)
+    # sql = "select count(1) from vm_task_runtimes_config where "\
+        # " date(used_out_time) != current_date and users_used_amount<%d" % (
+                # times_one_day)
+    sql = ''' select 1 from vm_task_runtimes_config a, vm_runtimes_type b,
+    taskgroup_runtimes_map c where  
+    a.task_group_id =c.task_group_id and b.id=c.runtimes_type_id    and                                                                                                                                           
+             date(a.used_out_time) != current_date or
+    a.users_used_amount<b.times_one_day '''
+    logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
         count = res[0][0]
@@ -350,7 +354,6 @@ def init():
 
     # global g_vpn_db
     # g_vpn_db = DBUtil(logger,options.db_ip,3306, "vpntest", options.username, options.password,'utf8')
-
     #启动时的时间跟设置时间不一致,关机开关开启
     cur_hour = get_cur_hour()
     tlist = get_shutdown_time()
@@ -391,9 +394,9 @@ def test():
 def main():
     try:
         init()
-        if g_reset == 1:
-            logger.info("reseting !!!")
-            reset()
+        # if g_reset == 1:
+            # logger.info("reseting !!!")
+            # reset()
         # while True:
         # test()
         # print "hihihi"
@@ -401,10 +404,10 @@ def main():
         # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
         # t2.start()
         # g_manvm.process()
+        print "to main loop"
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         print("exit system,start to shut down all vm...")
-        g_manvm.stop()
         time.sleep(10)
         exit(0)
         # vms.shutdown_allvm(g_serverid)

@@ -55,14 +55,14 @@ class TaskAllot(object):
 
             # #统一到一个w = 1的进程进行更新
             # if self.want_init == 1:
-                # print "start new day to reinit..."
-                # #logger.info("start new day to reinit...")
-                # TaskGroup.reset_rantimes_today(self.db)
-                # TaskGroup.reset_rantimes_allot_impl(self.db)
-                # self.cur_date = today
-                # print "cur_date", self.cur_date
-                # print "end new day to reinit..."
-                #logger.info("end new day to reinit...")
+            # print "start new day to reinit..."
+            # #logger.info("start new day to reinit...")
+            # TaskGroup.reset_rantimes_today(self.db)
+            # TaskGroup.reset_rantimes_allot_impl(self.db)
+            # self.cur_date = today
+            # print "cur_date", self.cur_date
+            # print "end new day to reinit..."
+            #logger.info("end new day to reinit...")
 
     def get_band_run_groupids(self):
         '''获取运行状态的任务组
@@ -133,18 +133,19 @@ class TaskAllot(object):
         return 0
 
     def acquired_allot_priv(self):
+        print "lock"
         self.lock.acquire()
-
 
     def release_allot_priv(self):
         self.lock.release()
-        
+
     def allot_by_type(self, vm_id, get_default, type):
         type_str = ">"
         if type == 0:
             type_str = ">"
         else:
             type_str = "="
+
         sql = '''SELECT
                         a.id
                     FROM
@@ -167,8 +168,7 @@ class TaskAllot(object):
                     AND b.id > 0
                     AND c.task_group_id = a.id
                     and b.priority %s 0
-                    AND f.server_id = %d ''' % (
-            type_str, self.server_id)
+                    AND f.server_id = %d ''' % (type_str, self.server_id)
         if type == 0:
             sql = sql + " order by b.priority"
         logger.info(sql)
@@ -185,7 +185,6 @@ class TaskAllot(object):
         gid = self.get_valid_gid(get_default)
         return gid
 
-
     def allot_by_default(self, vm_id):
         task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id)
         if not task:
@@ -193,9 +192,8 @@ class TaskAllot(object):
             return None
         ret = self.user.allot_user(vm_id, 0, task.id)
         if not ret:
-            logger.warn(
-            "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
-            vm_id, task.id, 0)
+            logger.warn("vm_id:%d,task_id:%d,task_group_id:%d no user to run",
+                        vm_id, task.id, 0)
             return None
         return task
 
@@ -203,6 +201,8 @@ class TaskAllot(object):
         try:
             if get_default:
                 task = self.allot_by_default(vm_id)
+                if task is None:
+                    return False
                 self.add_ran_times(task.id, 0, task.rid)
                 return True
             self.acquired_allot_priv()
@@ -243,7 +243,6 @@ class TaskAllot(object):
             self.release_allot_priv()
             return False
 
-
     def allot_by_rand(self, vm_id, get_default):
         task_group_id = self.allot_by_type(vm_id, get_default, 1)
         return task_group_id
@@ -255,9 +254,8 @@ class TaskAllot(object):
             return None
         ret = self.user.allot_user(vm_id, task_group_id, task.id)
         if not ret:
-            logger.warn(
-            "vm_id:%d,task_id:%d,task_group_id:%d no user to run",
-            vm_id, task.id, task_group_id)
+            logger.warn("vm_id:%d,task_id:%d,task_group_id:%d no user to run",
+                        vm_id, task.id, task_group_id)
             return None
 
         return task
@@ -282,7 +280,7 @@ class TaskAllot(object):
             # TaskGroup.add_default_ran_times(self.db)
         #成功时才技术,放在ad_stat接口了
         else:
-        #     tg.add_ran_times(task_id)
+            #     tg.add_ran_times(task_id)
             tg.add_impl_ran_times(task_id)
 
 

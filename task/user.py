@@ -8,6 +8,7 @@
 # @Description: Modify Here, Please
 
 import sys
+import datetime
 import logging
 import logging.config
 sys.path.append("..")
@@ -31,6 +32,14 @@ class UserAllot(object):
         self.task_profile = TaskProfile(server_id, db, pc, logger)
         self.unavail_day = {}
         self.use_cache = use_cache
+        self.cur_date = datetime.date.today()
+
+    def is_new_day(self):
+        today = datetime.date.today()
+        if today == self.cur_date:
+            return False
+        self.cur_date = today
+        return True
 
     def gone_days(self):
         days = 0
@@ -81,18 +90,30 @@ class UserAllot(object):
             return True
         return False
 
+    def reset_runtimes_on_newday(self, times_one_day):
+        if self.is_new_day():
+            self.logger.info("=========new day to reset runtimes=========")
+            sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
+                "and used_out_time<current_date " % (
+                    task_group_id, times_one_day)
+            self.logger.info(sql)
+            res = self.db.select_sql(sql)
+            if not res or len(res)<1:
+                self.reset_runtimes_config(task_group_id, times_one_day)
+
     def runnable_statistic(self, task_group_id, task_id, day, times_one_day):
         '''1.判断该任务是否有数据,没有数据的话,返回可运行,起始时间0
            2.有数据,获取该任务组的最小和最大可运行时间
         '''
         days = []
         if self.is_task_inited(task_group_id):
+            self.reset_runtimes_on_newday(times_one_day)
             sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
                 "and users_used_amount<%s order by day " % (
                     task_group_id, times_one_day)
             self.logger.info(sql)
             res = self.db.select_sql(sql)
-            if not res:
+            if not res or len(res)<1:
                 self.reset_runtimes_config(task_group_id, times_one_day)
             for r in res:
                 # if self.useable_profiles(r[0], task_id):
@@ -200,7 +221,7 @@ class UserAllot(object):
         s_info = str(self.server_id) + ":" + str(vm_id)
         times_one_day = self.runtimes_one_day(task_group_id)
         if times_one_day == 0:
-        logger.info(utils.auto_encoding("改任务组:%d 设置每天名额为0"), task_group_id)
+            self.logger.info(utils.auto_encoding("该任务组:%d 设置每天名额为0"), task_group_id)
             return False
         days = self.runnable_statistic(task_group_id, task_id, 1,
                                        times_one_day)
@@ -214,8 +235,7 @@ class UserAllot(object):
             if not self.unavail_day.has_key(vm_id):
                 self.unavail_day[vm_id] = set()
             if day in self.unavail_day[vm_id]:
-                self.logger.info(utils.auto_encoding("vm_id:%d , %d day"\
-                            "无可用分配使用的用户或名额", vm_id, day))
+                self.logger.info(utils.auto_encoding("vm_id:%d , %d day 无可用分配使用的用户或名额"), vm_id, day)
                 continue
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(

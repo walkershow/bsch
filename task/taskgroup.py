@@ -8,10 +8,6 @@
 
 from __future__ import division
 import sys
-import datetime
-import os
-import time
-import random
 import logging
 import logging.config
 from task import Task
@@ -33,7 +29,7 @@ class TaskGroup(object):
         self.id = id
         self.db = db
 
-    #groupid:0,task_id:0 表示默认任务
+    # groupid:0 表示默认任务
     def __initValidTasks(self):
         sql = "select b.id,b.task_id,a.start_time,a.end_time,a.allot_times,a.ran_times from vm_task_allot_impl a,vm_task_group b, vm_task c where b.id=%d \
                 and b.task_id=a.task_id and b.id =a.id and a.task_id=c.id and c.status=1 \
@@ -44,9 +40,7 @@ class TaskGroup(object):
         res = self.db.select_sql(sql)
         task = {}
         self.tasks = []
-        # print res
         for row in res:
-            #print row
             task = {
                 'task_id': row[1],
                 'start_time': row[2],
@@ -55,7 +49,6 @@ class TaskGroup(object):
                 'ran_times': row[5],
                 'is_default': False
             }
-            #print "task:", task
             self.tasks.append(task)
 
     @staticmethod
@@ -97,16 +90,6 @@ class TaskGroup(object):
         task = choice(dtask)
         return Task(task["task_id"], True, db, task['id'])
 
-    # @staticmethod
-    # def getDefaultTask(db):
-    #     sql = "select id,task_id,ran_times from vm_task_group where  id=0"
-    #     res = db.select_sql(sql)
-    #     if not res:
-    #         raise TaskGroupError,"%s sql get empty res"%(sql)
-    #     row = res[0]
-    #     task = {'task_id':row[1], 'start_time':0, 'end_time':0, 'times':9999999, 'ran_times':row[2], 'is_default': True}
-    #     return Task(task["task_id"], True, db)
-
     def add_ran_times(self, task_id):
         sql = "update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d" % (
             self.id, task_id)
@@ -122,11 +105,10 @@ class TaskGroup(object):
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
 
-    #如果刚好过那个时间点,次数可能会对不上
     def add_impl_ran_times(self, task_id):
-        sql = "update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d \
-             and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)" % (
-            self.id, task_id)
+        sql = '''update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d
+        and time_to_sec(NOW()) >= time_to_sec(start_time) and
+        time_to_sec(now())<time_to_sec(end_time)''' % (self.id, task_id)
 
         ret = self.db.execute_sql(sql)
         if ret < 0:
@@ -226,7 +208,7 @@ class TaskGroup(object):
                     task_templ_dict[task_id] = 0
                     ret = db.execute_sql(sql_impl)
                     if ret < 0:
-                         raise TaskGroupError, "%s excute error;ret:%d" % (
+                        raise TaskGroupError, "%s excute error;ret:%d" % (
                             sql_impl, ret)
             print "=========task_group_id:", id, "-----total:", total, " finish!!!!"
 
