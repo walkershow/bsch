@@ -40,9 +40,10 @@ class UserAllot(object):
             days = res[0][0]
         return days
 
-    def runtimes_one_day(self):
+    def runtimes_one_day(self, task_group_id):
         times = 0
-        sql = "select value from vm_sys_dict where `key` = 'runtimes_one_day'"
+        sql = '''select b.times_one_day from taskgroup_runtimes_map a, vm_runtimes_type b 
+        where a.runtimes_type_id = b.id and a.task_group_id=%d'''%(task_group_id)
         res = self.db.select_sql(sql)
         if res:
             times = int(res[0][0])
@@ -197,7 +198,10 @@ class UserAllot(object):
             return self.task_profile.set_cur_task_profile(
                 vm_id, task_id, task_group_id, None)
         s_info = str(self.server_id) + ":" + str(vm_id)
-        times_one_day = self.runtimes_one_day()
+        times_one_day = self.runtimes_one_day(task_group_id)
+        if times_one_day == 0:
+        logger.info(utils.auto_encoding("改任务组:%d 设置每天名额为0"), task_group_id)
+            return False
         days = self.runnable_statistic(task_group_id, task_id, 1,
                                        times_one_day)
         print "runnable days:", days
