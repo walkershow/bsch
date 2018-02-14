@@ -218,21 +218,22 @@ def main_loop():
                             logger.warn(
                                 utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
                                 vm_ids[i])
-                            logger.error(
-                                utils.auto_encoding(
-                                    "==========进入任务分配结束=========="))
-                            time.sleep(5)
-                            continue
+                            # logger.error(
+                                # utils.auto_encoding(
+                                    # "==========进入任务分配结束=========="))
+                            # time.sleep(5)
+                            # continue
                     else:
                         logger.warn(
-                            utils.auto_encoding("虚拟机:%d 当前运行任务数:%d>=4"),
-                            vm_ids[i], count)
+                            utils.auto_encoding('''虚拟机:%d
+                                当前运行任务数:%d>=%d'''),
+                            vm_ids[i], count, g_pb)
                 else:
                     logger.info(
                         utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
                         vm_ids[i])
             logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
-            time.sleep(2)
+            time.sleep(3)
 
         except:
             logger.error('exception on main_loop', exc_info=True)

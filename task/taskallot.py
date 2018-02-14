@@ -199,49 +199,47 @@ class TaskAllot(object):
 
     def allot_by_priority(self, vm_id, get_default):
         try:
+            task, gid, ret  = None, None, False
             if get_default:
                 task = self.allot_by_default(vm_id)
-                if task is None:
-                    return False
-                self.add_ran_times(task.id, 0, task.rid)
-                return True
-            self.acquired_allot_priv()
-            task = None
-            gid = None
-            self.reset_when_newday()
-            if self.selected_ids:
-                gid = self.get_valid_gid(get_default)
-                task = self.handle_taskgroup(gid, vm_id)
-                if task is None:
-                    self.release_allot_priv()
-                    return False
+                gid = 0
             else:
-                # priority
-                gid = self.allot_by_type(vm_id, get_default, 0)
-
-                if gid == 0:
-                    #不存在优先级高的任务组,执行随机分配
-                    logger.info("no priority task, get rand taskgroup")
-                    gid = self.allot_by_rand(vm_id, get_default)
-
-                if gid == 0:
-                    logger.warn("no else task to run,find default taskgroup")
-                    task = self.allot_by_default(vm_id)
-                else:
+                self.acquired_allot_priv()
+                self.reset_when_newday()
+                if self.selected_ids:
+                    gid = self.get_valid_gid(get_default)
                     task = self.handle_taskgroup(gid, vm_id)
-                    if task is None:
+                else:
+                    # priority
+                    gid = self.allot_by_type(vm_id, get_default, 0)
+
+                    if gid == 0:
+                        # 不存在优先级高的任务组,执行随机分配
+                        logger.info("no priority task, get rand taskgroup")
+                        gid = self.allot_by_rand(vm_id, get_default)
+
+                    if gid == 0:
+                        logger.warn('''no else task to run,find default
+                                taskgroup''')
                         task = self.allot_by_default(vm_id)
-                        gid = 0
+                    else:
+                        task = self.handle_taskgroup(gid, vm_id)
+                        if task is None:
+                            task = self.allot_by_default(vm_id)
+                            gid = 0
+
             if task is None:
-                self.release_allot_priv()
-                return False
-            self.add_ran_times(task.id, gid, task.rid)
-            self.release_allot_priv()
-            return True
+                ret = False
+            else:
+                self.add_ran_times(task.id, gid, task.rid)
+                ret = True
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
+            ret = False
+        finally:
             self.release_allot_priv()
-            return False
+            return ret
+        
 
     def allot_by_rand(self, vm_id, get_default):
         task_group_id = self.allot_by_type(vm_id, get_default, 1)
@@ -278,8 +276,8 @@ class TaskAllot(object):
             tg.add_ran_times(task_id)
             self.add_zero_limit_times(rid)
             # TaskGroup.add_default_ran_times(self.db)
-        #成功时才技术,放在ad_stat接口了
         else:
+            # 只更新impl的值得,不更新group,(group由脚本更新)
             #     tg.add_ran_times(task_id)
             tg.add_impl_ran_times(task_id)
 

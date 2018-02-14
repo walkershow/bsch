@@ -11,9 +11,9 @@ import sys
 import datetime
 import logging
 import logging.config
-sys.path.append("..")
 from task_profiles import TaskProfile
 from parallel import ParallelControl
+sys.path.append("..")
 import dbutil
 import utils
 
@@ -51,8 +51,9 @@ class UserAllot(object):
 
     def runtimes_one_day(self, task_group_id):
         times = 0
-        sql = '''select b.times_one_day from taskgroup_runtimes_map a, vm_runtimes_type b 
-        where a.runtimes_type_id = b.id and a.task_group_id=%d'''%(task_group_id)
+        sql = '''select b.times_one_day from taskgroup_runtimes_map a, vm_runtimes_type b
+        where a.runtimes_type_id = b.id and a.task_group_id=%d''' % (
+            task_group_id)
         res = self.db.select_sql(sql)
         if res:
             times = int(res[0][0])
@@ -90,16 +91,15 @@ class UserAllot(object):
             return True
         return False
 
-    def reset_runtimes_on_newday(self, times_one_day):
+    def reset_runtimes_on_newday(self, task_group_id, times_one_day):
         if self.is_new_day():
             self.logger.info("=========new day to reset runtimes=========")
-            sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
-                "and used_out_time<current_date " % (
-                    task_group_id, times_one_day)
-            self.logger.info(sql)
-            res = self.db.select_sql(sql)
-            if not res or len(res)<1:
-                self.reset_runtimes_config(task_group_id, times_one_day)
+            # sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
+                # "and used_out_time>=current_date limit 1" % ( task_group_id)
+            # self.logger.info(sql)
+            # res = self.db.select_sql(sql)
+            # if not res or len(res) < 1:
+            self.reset_runtimes_config(task_group_id, times_one_day)
 
     def runnable_statistic(self, task_group_id, task_id, day, times_one_day):
         '''1.判断该任务是否有数据,没有数据的话,返回可运行,起始时间0
@@ -107,13 +107,13 @@ class UserAllot(object):
         '''
         days = []
         if self.is_task_inited(task_group_id):
-            self.reset_runtimes_on_newday(times_one_day)
+            self.reset_runtimes_on_newday(task_group_id, times_one_day)
             sql = "select day from vm_task_runtimes_config where task_group_id=%d "\
-                "and users_used_amount<%s order by day " % (
+                "and users_used_amount<%s order by used_out_time,day " % (
                     task_group_id, times_one_day)
             self.logger.info(sql)
             res = self.db.select_sql(sql)
-            if not res or len(res)<1:
+            if not res or len(res) < 1:
                 self.reset_runtimes_config(task_group_id, times_one_day)
             for r in res:
                 # if self.useable_profiles(r[0], task_id):
@@ -221,7 +221,8 @@ class UserAllot(object):
         s_info = str(self.server_id) + ":" + str(vm_id)
         times_one_day = self.runtimes_one_day(task_group_id)
         if times_one_day == 0:
-            self.logger.info(utils.auto_encoding("该任务组:%d 设置每天名额为0"), task_group_id)
+            self.logger.info(
+                utils.auto_encoding("该任务组:%d 设置每天名额为0"), task_group_id)
             return False
         days = self.runnable_statistic(task_group_id, task_id, 1,
                                        times_one_day)
@@ -235,7 +236,9 @@ class UserAllot(object):
             if not self.unavail_day.has_key(vm_id):
                 self.unavail_day[vm_id] = set()
             if day in self.unavail_day[vm_id]:
-                self.logger.info(utils.auto_encoding("vm_id:%d , %d day 无可用分配使用的用户或名额"), vm_id, day)
+                self.logger.info(
+                    utils.auto_encoding("vm_id:%d , %d day 无可用分配使用的用户或名额"),
+                    vm_id, day)
                 continue
             if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
                 self.logger.info(
@@ -298,7 +301,7 @@ def test():
     user_allot = UserAllot(15, pc, dbutil, logger)
     # user_allot.allot_user(1, 452, 452)
     for i in range(0, 8):
-        user_allot.allot_user(1, 464, 464)
+        user_allot.allot_user(1, 10086, 10086)
 
 
 if __name__ == '__main__':
