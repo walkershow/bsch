@@ -213,6 +213,7 @@ def main_loop():
                         # update''')
                         ret = g_taskallot.allot_by_priority(
                             vm_ids[i], get_default)
+                        print "get task", ret
                         if not ret:
                             # if task_id is None:
                             logger.warn(

@@ -8,9 +8,12 @@
 # @Description: Modify Here, Please
 import sys
 import random
+import logging
+import logging.config
 sys.path.append("..")
 import dbutil
 from zero_running_rule import ZeroTask, ZeroTaskError
+from nine_running_rule import NineTask, NineTaskError
 from logbytask.logtask import LogTask, LogTaskError
 
 # from task.parallel import ParallelControl,ParallelControlException
@@ -23,6 +26,7 @@ class TaskProfile(object):
     log_task = None
     pc = None
     zt = None
+    nine = None
 
     def __init__(self, server_id, dbs, pc, log_handler):
         TaskProfile.db = dbs
@@ -31,14 +35,18 @@ class TaskProfile(object):
         TaskProfile.log_task = LogTask(dbs, log_handler)
         TaskProfile.pc = pc
         TaskProfile.zt = ZeroTask(server_id, dbs)
+        TaskProfile.nine = NineTask(server_id, dbs)
 
     def get_task_type(self, task_id):
-        sql = "select type,user_type,terminal_type from vm_task where id=%d " % (
+        sql = '''select
+        type,user_type,terminal_type,standby_time,timeout,copy_cookie,click_mode from
+        vm_task where id=%d ''' % (
             task_id)
         res = self.db.select_sql(sql)
         if not res:
-            return None, None, None
-        return res[0][0], res[0][1], res[0][2]
+            return None, None, None, None, None ,None, None
+        return (res[0][0], res[0][1], res[0][2], res[0][3], res[0][4],res[0][5]
+            ,res[0][6])
 
     def get_reenable_day(self, task_type):
         sql = "select re_enable_hour_start_range,re_enable_hour_end_range from vm_task_reenable "\
@@ -114,13 +122,25 @@ class TaskProfile(object):
         is_default = False
         if task_group_id == 0:
             is_default = True
-        task_type, user_type, terminal_type = self.get_task_type(task_id)
+        (task_type, user_type, terminal_type,standby_time, timeout, copy_cookie,
+        click_mode) = self.get_task_type(task_id)
+        print standby_time
+        standby_time_arr = standby_time.split(",")
+        print "time_arr", standby_time_arr
+        stimes = map(int, standby_time_arr)
+        if len(stimes)==1:
+            stimes.append(stimes[0])
+        randtime = random.randint(stimes[0],stimes[1])
+        print "rantime",randtime
         self.logger.info(
             "task id:%d task_type:%d,user_type:%d, terminal_type:%d", task_id,
             task_type, user_type, terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ
-        if is_default:
+        if task_group_id==0:
             profile_id = self.zt.get_usable_profiles(vm_id, user_type,
+                                                     terminal_type)
+        elif task_group_id==9999:
+            profile_id = self.nine.get_usable_profiles(vm_id, user_type,
                                                      terminal_type)
         else:
             profile_id = self.get_task_usable_profiles(vm_id, user_type,
@@ -137,9 +157,13 @@ class TaskProfile(object):
                                                    task_id)
         self.pc.add_allocated_num(task_group_id)
 
-        sql = "insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,task_group_id,status,start_time,oprcode,ran_minutes,user_type, terminal_type)"\
-        " value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d) "%(
-            self.server_id, vm_id, task_id, profile_id, task_group_id, -1, oprcode,user_type, terminal_type)
+        sql = '''insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,
+        task_group_id,status,start_time,oprcode,ran_minutes,user_type,
+        terminal_type,standby_time, timeout, copy_cookie,click_mode)
+         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d)''' %(
+            self.server_id, vm_id, task_id, profile_id, task_group_id,
+            -1, oprcode,user_type, terminal_type, randtime, timeout,
+            copy_cookie, click_mode)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
@@ -186,12 +210,28 @@ class TaskProfile(object):
             raise Exception, "%s exec failed ret:%d" % (sql, ret)
 
 
+def get_default_logger():
+    logger = logging.getLogger()
+    logger.setLevel(logging.DEBUG)
+
+    # console logger
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        "[%(asctime)s] [%(process)d] [%(module)s::%(funcName)s::%(lineno)d] [%(levelname)s]: %(message)s"
+    )
+    ch.setFormatter(formatter)
+    logger.addHandler(ch)
+    return logger
+
 if __name__ == '__main__':
+    global logger
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm2"
+    dbutil.db_name = "vm3"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    pc = ParallelControl(g_serverid, dbutil)
-    t = TaskProfile(1, dbutil, pc, None)
-    t.set_cur_task_profile(1, 1, 1)
+    logger = get_default_logger()
+    #pc = ParallelControl(g_serverid, dbutil)
+    t = TaskProfile(1, dbutil, None, logger)
+    t.set_cur_task_profile(1, 500, 500,1)

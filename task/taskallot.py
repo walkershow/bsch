@@ -102,6 +102,36 @@ class TaskAllot(object):
             return res[0][0]
         return '1970-1-1 00:00:00'
 
+    def task_last_succ_time(self, task_id):
+        sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
+        cur_task_id=%d and status>=2''' % (
+            self.server_id, task_id)
+        res = dbutil.select_sql(sql)
+        if res:
+            return res[0][0]
+        return '1970-1-1 00:00:00'
+
+    
+    def right_to_allot_zero(self, task_id):
+        #return True
+        succ_time = self.task_last_succ_time(task_id)
+        if succ_time is None:
+            succ_time = '1970-1-1 00:00:00'
+        redial_time, ip = self.vpn_update_time()
+        logger.info("task_id:%d,last_succ_time:%s, redial_time:%s",
+                    task_id, succ_time, redial_time)
+        rtime, stime = None, None
+        if redial_time:
+            rtime = time.strptime(str(redial_time), "%Y-%m-%d %H:%M:%S")
+            stime = time.strptime(str(succ_time), "%Y-%m-%d %H:%M:%S")
+
+            if stime < rtime:
+                return True
+            else:
+                logger.warn("task_id:%d succ_time>=redial_time",
+                            task_id)
+        return False
+
     def right_to_allot(self, task_group_id):
         #return True
         succ_time = self.vm_last_succ_time(task_group_id)
@@ -186,9 +216,13 @@ class TaskAllot(object):
         return gid
 
     def allot_by_default(self, vm_id):
+        logger.info("allot default task")
         task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id)
         if not task:
             logger.warn("no default task to run")
+            return None
+        if not self.right_to_allot_zero(task.id):
+            logger.warn("wait for vpn dial...")
             return None
         ret = self.user.allot_user(vm_id, 0, task.id)
         if not ret:
@@ -196,6 +230,20 @@ class TaskAllot(object):
                         vm_id, task.id, 0)
             return None
         return task
+
+    def allot_by_nine(self, vm_id):
+        '''deprecate
+        '''
+        return None
+        logger.info("allot nine task")
+        task = TaskGroup.getNineTask(self.db, self.server_id, vm_id)
+        ret = self.user.allot_user(vm_id, 9999, task.id)
+        if not ret:
+            logger.warn("vm_id:%d,task_id:%d,task_group_id:%d no user to run",
+                        vm_id, task.id, 9999)
+            return None
+        return task
+
 
     def allot_by_priority(self, vm_id, get_default):
         try:
@@ -208,31 +256,36 @@ class TaskAllot(object):
                 self.reset_when_newday()
                 if self.selected_ids:
                     gid = self.get_valid_gid(get_default)
-                    task = self.handle_taskgroup(gid, vm_id)
+                    # task = self.handle_taskgroup(gid, vm_id)
                 else:
                     # priority
                     gid = self.allot_by_type(vm_id, get_default, 0)
+                    print "gid:",gid
 
                     if gid == 0:
                         # 不存在优先级高的任务组,执行随机分配
                         logger.info("no priority task, get rand taskgroup")
                         gid = self.allot_by_rand(vm_id, get_default)
+                        print "gid:",gid
 
-                    if gid == 0:
-                        logger.warn('''no else task to run,find default
-                                taskgroup''')
+                if gid == 0:
+                    logger.warn('''no else task to run,find default
+                            taskgroup''')
+                    task = self.allot_by_default(vm_id)
+                else:
+                    task = self.handle_taskgroup(gid, vm_id)
+                    #找不到可用人物，查找零跑任务
+                    if task is None:
                         task = self.allot_by_default(vm_id)
-                    else:
-                        task = self.handle_taskgroup(gid, vm_id)
-                        if task is None:
-                            task = self.allot_by_default(vm_id)
-                            gid = 0
+                        gid = 0
 
+            if task is None:
+                task = self.allot_by_nine(vm_id)
             if task is None:
                 ret = False
             else:
-                self.add_ran_times(task.id, gid, task.rid)
                 ret = True
+                self.add_ran_times(task.id, gid, task.rid)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
@@ -240,7 +293,6 @@ class TaskAllot(object):
             self.release_allot_priv()
             return ret
         
-
     def allot_by_rand(self, vm_id, get_default):
         task_group_id = self.allot_by_type(vm_id, get_default, 1)
         return task_group_id
@@ -250,7 +302,9 @@ class TaskAllot(object):
         task = tg.choose_vaild_task(self.server_id, vm_id)
         if not task:
             return None
+        logger.warn("==========get the valid task==========")
         ret = self.user.allot_user(vm_id, task_group_id, task.id)
+        print "the allot user ret", ret
         if not ret:
             logger.warn("vm_id:%d,task_id:%d,task_group_id:%d no user to run",
                         vm_id, task.id, task_group_id)
@@ -310,11 +364,15 @@ def allot_test(dbutil):
 
 
 def getTask(dbutil):
-    pc = ParallelControl(18, dbutil, logger)
-    t = TaskAllot(0, 1, pc, dbutil)
-    while True:
-        t.allot_by_priority("d:\\10.bat", False)
-        time.sleep(5)
+    from user import UserAllot
+    pc = ParallelControl(15, dbutil, logger)
+    user = UserAllot(15, pc, dbutil, logger)
+    t = TaskAllot(0, 15, pc, user,dbutil)
+    t.allot_by_default(5)
+    #t.allot_by_nine(1)
+    #while True:
+    #    t.allot_by_priority(1, False)
+    #    time.sleep(5)
 
 
 def get_default_logger():
@@ -335,7 +393,7 @@ def get_default_logger():
 if __name__ == '__main__':
     global logger
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm-test"
+    dbutil.db_name = "vm3"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"

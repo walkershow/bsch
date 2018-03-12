@@ -64,7 +64,7 @@ class TaskGroup(object):
         task_id_list = []
         task_id_list_pc = [10000, 10001, 10002, 10003, 10004, 10005]
         task_id_list_mobi = [10006, 10007, 10008, 10009, 10010, 10011]
-        # print res
+        print res
         if res:
             for r in res:
                 id = r[0]
@@ -89,6 +89,11 @@ class TaskGroup(object):
             return None
         task = choice(dtask)
         return Task(task["task_id"], True, db, task['id'])
+
+    @staticmethod
+    def getNineTask(db, server_id, vm_id):
+        return Task(9999, True, db, None)
+
 
     def add_ran_times(self, task_id):
         sql = "update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d" % (
@@ -304,7 +309,7 @@ class TaskGroup(object):
         for t in self.tasks:
             task_id = t["task_id"]
             return Task(t["task_id"], False, self.db)
-        return TaskGroup.getDefaultTask(self.db, server_id, vm_id)
+        return None
 
 
 if __name__ == '__main__':

@@ -78,7 +78,7 @@ class UserAllot(object):
         return False
 
     def useable_profiles(self, day, task_id):
-        ty, uty, tty = self.task_profile.get_task_type(task_id)
+        ty, uty, tty,st_time,timeout, cc, cm= self.task_profile.get_task_type(task_id)
         if ty is None:
             return False
         sql = '''select count(1) from vm_users where
@@ -215,7 +215,7 @@ class UserAllot(object):
     def allot_user(self, vm_id, task_group_id, task_id):
         if not self.use_cache:
             self.clear_cache()
-        if task_group_id == 0:
+        if task_group_id == 0 or task_group_id==9999:
             return self.task_profile.set_cur_task_profile(
                 vm_id, task_id, task_group_id, None)
         s_info = str(self.server_id) + ":" + str(vm_id)
@@ -299,14 +299,14 @@ def test():
     logger = get_default_logger()
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
-    # user_allot.allot_user(1, 452, 452)
-    for i in range(0, 8):
-        user_allot.allot_user(1, 10086, 10086)
+    user_allot.allot_user(1, 512, 512)
+    #for i in range(0, 8):
+    #    user_allot.allot_user(1, 10086, 10086)
 
 
 if __name__ == '__main__':
     import threading
-    t2 = threading.Thread(target=test, name="pause_thread")
+    t2 = threading.Thread(target=test, name="test")
     t2.start()
     # t3 = threading.Thread(target=test, name="pause_thread")
     # t3.start()
