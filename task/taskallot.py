@@ -28,7 +28,7 @@ class TaskAllotError(Exception):
 class TaskAllot(object):
     '''任务分配'''
 
-    def __init__(self, server_id, pc, user, db, want_init=0):
+    def __init__(self, want_init, server_id, pc, user, db):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
@@ -249,14 +249,13 @@ class TaskAllot(object):
                         logger.info("get valid gid:%d", gid)
                     else:
                         logger.warn("wait for redial:%d", gid)
-                        got_task = False
                         continue
                     task = self.handle_taskgroup(gid, vm_id)
                     if task:
                         logger.info("get the task:%d", task.id)
+                        got_task = True
                         break
                     else:
-                        got_task = False
                         continue
 
                 if not got_task:
@@ -273,9 +272,9 @@ class TaskAllot(object):
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
-        finally:
-            self.release_allot_priv()
-            return ret
+        # finally:
+        self.release_allot_priv()
+        return ret
 
     def handle_taskgroup(self, task_group_id, vm_id):
         tg = TaskGroup(task_group_id, self.db)
