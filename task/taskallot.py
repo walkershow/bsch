@@ -37,6 +37,7 @@ class TaskAllot(object):
         self.pc = pc
         self.user = user
         self.lock = utils.Lock("/tmp/lock-sched.lock")
+        
 
     def log_task_id(self, id, task_id):
         sql = "update vm_allot_task set cur_task_id=%d where id=%d" % (task_id,
@@ -238,25 +239,29 @@ class TaskAllot(object):
                 task = self.allot_by_default(vm_id)
                 gid = 0
             else:
-                self.acquired_allot_priv()
+                # self.acquired_allot_priv()
                 self.reset_when_newday()
                 self.get_candidate_gid(vm_id, get_default, 1)
                 print "selected ids:", self.selected_ids
                 while self.selected_ids:
+                    
                     gid = self.selected_ids.pop()
                     print "handle gid:", gid
-                    if self.right_to_allot(gid):
-                        logger.info("get valid gid:%d", gid)
-                    else:
-                        logger.warn("wait for redial:%d", gid)
-                        continue
-                    task = self.handle_taskgroup(gid, vm_id)
-                    if task:
-                        logger.info("get the task:%d", task.id)
-                        got_task = True
-                        break
-                    else:
-                        continue
+                    with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 2):
+                        if self.right_to_allot(gid):
+                            logger.info("get valid gid:%d", gid)
+                        else:
+                            logger.warn("wait for redial:%d", gid)
+                            continue
+                        
+                        task = self.handle_taskgroup(gid, vm_id)
+                        if task:
+                            logger.info("get the task:%d", task.id)
+                            got_task = ret = True
+                            self.add_ran_times(task.id, gid, task.rid)
+                            break
+                        else:
+                            continue
 
                 if not got_task:
                     logger.warn('''no else task to run,find default
@@ -266,14 +271,12 @@ class TaskAllot(object):
                         ret = False
                     else:
                         ret = True
-                else:
-                    ret = True
-                    self.add_ran_times(task.id, gid, task.rid)
+                        self.add_ran_times(task.id, gid, task.rid)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
         # finally:
-        self.release_allot_priv()
+        # self.release_allot_priv()
         return ret
 
     def handle_taskgroup(self, task_group_id, vm_id):
@@ -346,7 +349,7 @@ def getTask(dbutil):
     from user import UserAllot
     pc = ParallelControl(11, dbutil, logger)
     user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(11, pc, user, dbutil)
+    t = TaskAllot(0, 11, pc, user, dbutil)
 
     # t.allot_by_default(5)
     #t.allot_by_nine(1)
@@ -374,8 +377,8 @@ def get_default_logger():
 
 if __name__ == '__main__':
     global logger
-    #dbutil.db_host = "192.168.1.21"
-    dbutil.db_host = "3.3.3.6"
+    dbutil.db_host = "192.168.1.21"
+    #dbutil.db_host = "3.3.3.6"
     dbutil.db_name = "vm3"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
