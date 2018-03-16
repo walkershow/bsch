@@ -206,7 +206,7 @@ class TaskAllot(object):
         rid_set = self.get_band_run_groupids()
         band_str = ",".join(str(s) for s in rid_set)
         print("band task_group_id:%s" % (band_str))
-        # logger.info("band task_group_id:%s", band_str)
+        logger.info("band task_group_id:%s", band_str)
 
         self.selected_ids = list(set(ids) - rid_set)
         print self.selected_ids
@@ -247,21 +247,26 @@ class TaskAllot(object):
                     
                     gid = self.selected_ids.pop()
                     print "handle gid:", gid
-                    with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 2):
-                        if self.right_to_allot(gid):
-                            logger.info("get valid gid:%d", gid)
-                        else:
-                            logger.warn("wait for redial:%d", gid)
-                            continue
-                        
-                        task = self.handle_taskgroup(gid, vm_id)
-                        if task:
-                            logger.info("get the task:%d", task.id)
-                            got_task = ret = True
-                            self.add_ran_times(task.id, gid, task.rid)
-                            break
-                        else:
-                            continue
+                    try:
+                        with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 2):
+                            if self.right_to_allot(gid):
+                                logger.info("get valid gid:%d", gid)
+                            else:
+                                logger.warn("wait for redial:%d", gid)
+                                continue
+                            
+                            task = self.handle_taskgroup(gid, vm_id)
+                            if task:
+                                logger.info("get the task:%d", task.id)
+                                got_task = ret = True
+                                self.add_ran_times(task.id, gid, task.rid)
+                                break
+                            else:
+                                continue
+                    except Exception, e:
+                        logger.info("exception in lock, timeout")
+                        print "exception in lock", e
+                        continue
 
                 if not got_task:
                     logger.warn('''no else task to run,find default
