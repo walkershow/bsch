@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-'''
-@Author: coldplay
-@Date: 2017-05-13 16:32:04
-@Last Modified by:   coldplay
-@Last Modified time: 2017-05-13 16:32:04
+'''
+@Author: coldplay
+@Date: 2017-05-13 16:32:04
+@Last Modified by:   coldplay
+@Last Modified time: 2017-05-13 16:32:04
 '''
 
 import sys
@@ -37,7 +37,6 @@ class TaskAllot(object):
         self.pc = pc
         self.user = user
         self.lock = utils.Lock("/tmp/lock-sched.lock")
-        
 
     def log_task_id(self, id, task_id):
         sql = "update vm_allot_task set cur_task_id=%d where id=%d" % (task_id,
@@ -66,7 +65,7 @@ class TaskAllot(object):
             #logger.info("end new day to reinit...")
 
     def get_band_run_groupids(self):
-        '''获取运行状态的任务组
+        '''获取运行状态的任务组
         '''
         group_ids = []
         sql = "select task_group_id from vm_cur_task where server_id=%d and status in(-1,1) and task_group_id !=0 " % (
@@ -104,7 +103,7 @@ class TaskAllot(object):
         return '1970-1-1 00:00:00'
 
     def task_last_succ_time(self, task_id):
-        sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
+        sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
         cur_task_id=%d and status>=2''' % (self.server_id, task_id)
         res = dbutil.select_sql(sql)
         if res:
@@ -160,7 +159,7 @@ class TaskAllot(object):
                 return gid
         return 0
 
-    def acquired_allot_priv(self):
+    def acquire_allot_priv(self):
         print "lock"
         self.lock.acquire()
 
@@ -173,28 +172,28 @@ class TaskAllot(object):
             type_str = ">"
         else:
             type_str = "="
-        sql = '''SELECT
-                        a.id
-                    FROM
-                        vm_task_group b,
-                        vm_task_allot_impl a,
-                        vm_allot_task_by_servergroup c,
-                        vm_task d,
-                        vm_server_group f
-                    WHERE
-                        b.id = a.id
-                    AND b.task_id = a.task_id
-                    AND d.id = b.task_id
-                    AND d. STATUS = 1
-                    AND f.id = c.server_group_id
-                    and f.status =1
-                    AND c.task_group_id = b.id
-                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
-                    AND time_to_sec(a.end_time)
-                    AND a.ran_times < a.allot_times
-                    AND b.id > 0
-                    AND c.task_group_id = a.id
-                    and b.priority %s 0
+        sql = '''SELECT
+                        a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.priority %s 0
                     AND f.server_id = %d ''' % (type_str, self.server_id)
         if type == 0:
             sql = sql + " order by b.priority"
@@ -239,22 +238,22 @@ class TaskAllot(object):
                 task = self.allot_by_default(vm_id)
                 gid = 0
             else:
-                # self.acquired_allot_priv()
+                # self.()
                 self.reset_when_newday()
                 self.get_candidate_gid(vm_id, get_default, 1)
                 print "selected ids:", self.selected_ids
                 while self.selected_ids:
-                    
+
                     gid = self.selected_ids.pop()
                     print "handle gid:", gid
                     try:
-                        with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 2):
+                        with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
                             if self.right_to_allot(gid):
                                 logger.info("get valid gid:%d", gid)
                             else:
-                                logger.warn("wait for redial:%d", gid)
+                                # logger.warn("wait for redial:%d", gid)
                                 continue
-                            
+
                             task = self.handle_taskgroup(gid, vm_id)
                             if task:
                                 logger.info("get the task:%d", task.id)
@@ -266,15 +265,20 @@ class TaskAllot(object):
                     except Exception, e:
                         logger.info("exception in lock, timeout")
                         print "exception in lock", e
+                        logger.info("get lock failed,try to get defaul task")
+                        task = self.allot_by_default(vm_id)
+                        if task:
+                            got_task = ret = True
+                            self.add_ran_times(task.id, gid, task.rid)
+                            logger.info("get default task succ")
+                            break
                         continue
 
                 if not got_task:
-                    logger.warn('''no else task to run,find default
+                    logger.warn('''no else task to run,find default
                             taskgroup''')
                     task = self.allot_by_default(vm_id)
-                    if not task:
-                        ret = False
-                    else:
+                    if task:
                         ret = True
                         self.add_ran_times(task.id, gid, task.rid)
         except TaskError, t:
@@ -308,7 +312,7 @@ class TaskAllot(object):
             raise Exception, "%s excute error;ret:%d" % (sql, ret)
 
     def add_ran_times(self, task_id, task_group_id, rid):
-        ''' 分配成功后有可用profile 时计数
+        ''' 分配成功后有可用profile 时计数
         '''
         print "add_ran_times"
         tg = TaskGroup(task_group_id, self.db)
@@ -324,7 +328,7 @@ class TaskAllot(object):
 
 
 def allot_test(dbutil):
-    '''任务分配测试
+    '''任务分配测试
     '''
     task_group_id = None
     print len(sys.argv)
