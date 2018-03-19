@@ -269,7 +269,7 @@ class TaskAllot(object):
                         task = self.allot_by_default(vm_id)
                         if task:
                             got_task = ret = True
-                            self.add_ran_times(task.id, gid, task.rid)
+                            self.add_ran_times(task.id, 0, task.rid)
                             logger.info("get default task succ")
                             break
                         continue
@@ -280,7 +280,7 @@ class TaskAllot(object):
                     task = self.allot_by_default(vm_id)
                     if task:
                         ret = True
-                        self.add_ran_times(task.id, gid, task.rid)
+                        self.add_ran_times(task.id, 0, task.rid)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
