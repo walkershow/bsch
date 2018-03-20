@@ -7,13 +7,16 @@
 '''
 
 from __future__ import division
-import sys
+
 import logging
 import logging.config
-from task import Task
+import sys
+from random import choice
+
 sys.path.append("..")
 import dbutil
-from random import choice
+from task import Task
+
 logger = None
 
 
@@ -50,30 +53,70 @@ class TaskGroup(object):
                 'is_default': False
             }
             self.tasks.append(task)
-
+    
     @staticmethod
-    def getDefaultTask(db, server_id, vm_id):
-        sql = "select id,user_type,terminal_type from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
-                and ran_times<run_times and server_id=%d and vm_id=%d"
-
+    def can_run_default(db, server_id, vm_id, tty, uty ):
+        sql = '''select count(1) from zero_schedule_list where time_to_sec(NOW()) 
+        between time_to_sec(start_time) and time_to_sec(end_time) 
+        and ran_times>=run_times and server_id=%d and vm_id=%d and'''
+        if uty == 0 and tty ==1:
+            sql = sql + " user_type = 0 and terminal_type=1"
+        elif uty == 0 and tty==2:
+            sql = sql + " user_type = 0 and terminal_type=2"
+        elif uty != 0 and tty==1:
+            sql = sql + " user_type != 0 and terminal_type=1"
+        elif uty != 0 and tty==1:
+            sql = sql + " user_type != 0 and terminal_type=2"
         sql = sql % (server_id, vm_id)
         # logger.info(sql)
         print sql
         res = db.select_sql(sql)
-        dtask = []
-        task_id_list = []
-        task_id_list_pc = [10000, 10001, 10002, 10003, 10004, 10005]
-        task_id_list_mobi = [10006, 10007, 10008, 10009, 10010, 10011]
+        if res:
+            count = res[0][0]
+            if count >= 1:
+                return False
+        return True
+
+    @staticmethod
+    def getDefaultTask(db, server_id, vm_id, not_baidu = 0):
+        sql = "select id,user_type,terminal_type from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
+                and ran_times<run_times and server_id=%d and vm_id=%d"
+        if not_baidu > 0 :
+            sql = sql + " and user_type>0"
+            sql = sql % (server_id, vm_id)
+        else:
+            sql = sql + " and user_type=0"
+            sql = sql % (server_id, vm_id)
+
+        # logger.info(sql)
+        print sql
+        res                     = db.select_sql(sql)
+        dtask                   = []
+        task_id_list            = []
+        task_id_list_pc_baidu   = [10000]
+        task_id_list_mobi_baidu = [10006]
+        task_id_list_pc         = [None,10001, 10002, 10003, 10004, 10005]
+        task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011]
         print res
         if res:
             for r in res:
-                id = r[0]
+                id  = r[0]
                 uty = r[1]
                 tty = r[2]
-                if tty == 1:
+                if not TaskGroup.can_run_default(db, server_id ,vm_id, tty, uty):
+                    print "can not run this type:", uty, tty
+                    return None
+                if tty == 1 and uty == 0:
+                    task_id_list = task_id_list_pc_baidu
+                elif tty == 1 and uty != 0:
                     task_id_list = task_id_list_pc
-                else:
+
+                elif tty == 2 and uty == 0:
+                    task_id_list = task_id_list_mobi_baidu
+                elif tty == 2 and uty != 0:
                     task_id_list = task_id_list_mobi
+                else:
+                    logger.error("unkonw tty:%d,uty:%d",tty, uty)
                 task_id = task_id_list[uty]
                 task = {
                     'id': id,
