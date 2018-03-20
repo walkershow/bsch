@@ -214,11 +214,12 @@ class TaskAllot(object):
         gid = self.get_valid_gid(get_default)
         return gid
 
-    def allot_by_default(self, vm_id):
-        logger.info("allot default task")
-        task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id)
+
+    def allot_by_default(self, vm_id, uty):
+        logger.info("start to allot default task,%d", uty)
+        task = TaskGroup.getDefaultTask(self.db, self.server_id, vm_id, uty)
         if not task:
-            logger.warn("no default task to run")
+            logger.warn("no default task to run uty:%d", uty)
             return None
         if not self.right_to_allot_zero(task.id):
             logger.warn("wait for vpn dial...")
@@ -234,10 +235,15 @@ class TaskAllot(object):
         try:
             task, gid, ret = None, None, False
             got_task = False
-            if get_default:
-                task = self.allot_by_default(vm_id)
-                gid = 0
-            else:
+            gid = 0
+            # if get_default:
+            task = self.allot_by_default(vm_id,0)
+            if not task:
+                task = self.allot_by_default(vm_id,1)
+            # if task:
+                # return True
+            # else:
+            if not task:
                 # self.()
                 self.reset_when_newday()
                 self.get_candidate_gid(vm_id, get_default, 1)
@@ -258,29 +264,29 @@ class TaskAllot(object):
                             if task:
                                 logger.info("get the task:%d", task.id)
                                 got_task = ret = True
-                                self.add_ran_times(task.id, gid, task.rid)
                                 break
                             else:
                                 continue
                     except Exception, e:
                         logger.info("exception in lock, timeout")
                         print "exception in lock", e
-                        logger.info("get lock failed,try to get defaul task")
-                        task = self.allot_by_default(vm_id)
-                        if task:
-                            got_task = ret = True
-                            self.add_ran_times(task.id, 0, task.rid)
-                            logger.info("get default task succ")
-                            break
+                        # logger.info("get lock failed,try to get defaul task")
+                        # task = self.allot_by_default(vm_id)
+                        # if task:
+                            # got_task = ret = True
+                            # self.add_ran_times(task.id, 0, task.rid)
+                            # logger.info("get default task succ")
+                            # break
                         continue
+            self.add_ran_times(task.id, gid, task.rid)
 
-                if not got_task:
-                    logger.warn('''no else task to run,find default
-                            taskgroup''')
-                    task = self.allot_by_default(vm_id)
-                    if task:
-                        ret = True
-                        self.add_ran_times(task.id, 0, task.rid)
+                # if not got_task:
+                    # logger.warn('''no else task to run,find default
+                            # taskgroup''')
+                    # task = self.allot_by_default(vm_id)
+                    # if task:
+                        # ret = True
+                        # self.add_ran_times(task.id, 0, task.rid)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
@@ -360,13 +366,14 @@ def getTask(dbutil):
     user = UserAllot(11, pc, dbutil, logger)
     t = TaskAllot(0, 11, pc, user, dbutil)
 
-    # t.allot_by_default(5)
+    t.allot_by_default(5, 0)
+    t.allot_by_default(5, 1)
     #t.allot_by_nine(1)
-    while True:
-        ret = t.allot_by_priority(1, False)
-        print ret
-        time.sleep(5)
-        break
+    # while True:
+        # ret = t.allot_by_priority(1, False)
+        # print ret
+        # time.sleep(5)
+        # break
 
 
 def get_default_logger():
