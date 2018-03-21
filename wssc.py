@@ -62,7 +62,7 @@ def autoargs():
     server_id = int(dirs[-3])
     logger.info("get vmid,serverid from cwd:%s,%s", vm_id, server_id)
 
-
+ript_name(task_id, task_group_id)
 def init():
     parser = optparse.OptionParser()
     parser.add_option(
@@ -226,14 +226,15 @@ def kill_zombie_proc(interval=140):
 
 
 def runcmd(task_id, id, task_type, task_group_id):
-    if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
-        script_name = task_script_names[task_type]
-    elif task_group_id == 0:
-        script_name = "0.py"
-    elif task_group_id >= 50000:
-        script_name = get_task_scriptfile(task_id)
-    else:
-        script_name = str(task_id) + ".py"
+    # if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
+        # script_name = task_script_names[task_type]
+    # elif task_group_id == 0:
+        # script_name = "0.py"
+    # elif task_group_id >= 50000:
+        # script_name = get_task_scriptfile(task_id)
+    # else:
+        # script_name = str(task_id) + ".py"
+    script_name = get_script_name(task_id, task_group_id)
     script = os.path.join(script_path, script_name)
     # script = get_task_scriptfile(task_id)
     print "script:", script
@@ -331,12 +332,22 @@ def notify_vpn_redial():
 
 
 def get_scirpt_name(task_id, task_group_id):
-    if task_group_id == 0:
-        return "0.py"
-    user_type = get_user_type(task_id)
-    script_name = str(task_id) + ".py"
-    if user_type in range(0, 6) and task_group_id != 0:
-        script_name = task_script_names[user_type]
+    if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
+        script_name = task_script_names[task_type]
+    elif task_group_id == 0:
+        script_name = "0.py"
+    elif task_group_id >= 50000:
+        script_name = get_task_scriptfile(task_id)
+    else:
+        script_name = str(task_id) + ".py"
+
+    # if task_group_id == 0:
+        # return "0.py"
+
+    # user_type = get_user_type(task_id)
+    # script_name = str(task_id) + ".py"
+    # if user_type in range(0, 6) and task_group_id != 0:
+        # script_name = task_script_names[user_type]
     return script_name
 
 
