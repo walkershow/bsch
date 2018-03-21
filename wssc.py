@@ -62,7 +62,7 @@ def autoargs():
     server_id = int(dirs[-3])
     logger.info("get vmid,serverid from cwd:%s,%s", vm_id, server_id)
 
-ript_name(task_id, task_group_id)
+
 def init():
     parser = optparse.OptionParser()
     parser.add_option(
@@ -214,7 +214,7 @@ def kill_zombie_proc(interval=140):
                 logger.info("===========task proc:%d is not acting======", tid)
                 logger.info("task_id:%d,id:%d redial_time-stime>140", tid, id)
                 set_task_status(8, id)
-                script_name = get_scirpt_name(tid, gid)
+                script_name = get_script_name(tid, gid)
                 cmd_findstr = script_name + " -t %d" % (id)
                 proc = find_proc_by_cmdline(cmd_findstr)
                 kill_proc_by_pid(proc)
@@ -234,7 +234,7 @@ def runcmd(task_id, id, task_type, task_group_id):
         # script_name = get_task_scriptfile(task_id)
     # else:
         # script_name = str(task_id) + ".py"
-    script_name = get_script_name(task_id, task_group_id)
+    script_name = get_script_name(task_id, task_group_id, task_type)
     script = os.path.join(script_path, script_name)
     # script = get_task_scriptfile(task_id)
     print "script:", script
@@ -331,9 +331,11 @@ def notify_vpn_redial():
         logger.error("sql:%s, ret:%d", sql, ret)
 
 
-def get_scirpt_name(task_id, task_group_id):
-    if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
-        script_name = task_script_names[task_type]
+def get_script_name(task_id, task_group_id, user_type = None):
+    if user_type is None:
+        user_type = get_user_type(task_id)
+    if user_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
+        script_name = task_script_names[user_type]
     elif task_group_id == 0:
         script_name = "0.py"
     elif task_group_id >= 50000:
@@ -352,7 +354,7 @@ def get_scirpt_name(task_id, task_group_id):
 
 
 def del_timeout_task():
-    sql = '''select id,cur_task_id,task_group_id from vm_cur_task
+    sql = '''select id,cur_task_id,task_group_id,user_type from vm_cur_task
     where status in (1,2) and server_id=%d and vm_id=%d''' % (server_id, vm_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
@@ -362,7 +364,8 @@ def del_timeout_task():
             id = r[0]
             task_id = r[1]
             task_group_id = r[2]
-            script_name = get_scirpt_name(task_id, task_group_id)
+            user_type = r[3]
+            script_name = get_script_name(task_id, task_group_id,user_type)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
