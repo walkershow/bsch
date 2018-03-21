@@ -160,7 +160,7 @@ def can_take_task():
     taskgroup_runtimes_map c where  
     a.task_group_id =c.task_group_id and b.id=c.runtimes_type_id    and                                                                                                                                           
              date(a.used_out_time) != current_date or
-    a.users_used_amount<b.times_one_day '''
+    a.users_used_amount<b.times_one_day limit 1'''
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
@@ -212,7 +212,7 @@ def main_loop():
                         # dbutil.select_sql('''select * from vm_priv where id=1 for
                         # update''')
                         ret = g_taskallot.allot_by_priority(
-                            vm_ids[i], get_default)
+                            vm_ids[i] )
                         print "get task", ret
                         if not ret:
                             # if task_id is None:
