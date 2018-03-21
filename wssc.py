@@ -226,10 +226,12 @@ def kill_zombie_proc(interval=140):
 
 
 def runcmd(task_id, id, task_type, task_group_id):
-    if task_type in range(0, 6) and task_group_id != 0:
+    if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
         script_name = task_script_names[task_type]
     elif task_group_id == 0:
         script_name = "0.py"
+    elif task_group_id >= 50000:
+        script_name = get_task_scriptfile(task_id)
     else:
         script_name = str(task_id) + ".py"
     script = os.path.join(script_path, script_name)
