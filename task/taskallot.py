@@ -313,6 +313,7 @@ class TaskAllot(object):
                             else:
                                 continue
                     except Exception, e:
+                        logger.error('exception on lock', exc_info=True)
                         logger.info("exception in lock, timeout")
                         print "exception in lock", e
                         continue
@@ -424,8 +425,8 @@ if __name__ == '__main__':
     global logger
     dbutil.db_host = "192.168.1.21"
     #dbutil.db_host = "3.3.3.6"
-    #dbutil.db_name = "vm3"
-    dbutil.db_name = "vm-test"
+    dbutil.db_name = "vm3"
+    #dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"

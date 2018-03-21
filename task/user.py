@@ -78,7 +78,7 @@ class UserAllot(object):
         return False
 
     def useable_profiles(self, day, task_id):
-        ty, uty, tty,st_time,timeout, cc, cm= self.task_profile.get_task_type(task_id)
+        ty, uty, tty,st_time,timeout, cc, cm, inter_time = self.task_profile.get_task_type(task_id)
         if ty is None:
             return False
         sql = '''select count(1) from vm_users where
