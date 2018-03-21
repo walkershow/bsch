@@ -299,7 +299,7 @@ def test():
     logger = get_default_logger()
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
-    user_allot.allot_user(1, 512, 512)
+    user_allot.allot_user(1, 50000, 50000)
     #for i in range(0, 8):
     #    user_allot.allot_user(1, 10086, 10086)
 

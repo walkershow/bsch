@@ -53,6 +53,27 @@ class TaskGroup(object):
                 'is_default': False
             }
             self.tasks.append(task)
+
+    def __initValidTasks2(self):
+        sql = "select b.id,b.task_id from vm_task_group b, vm_task c where b.id=%d \
+                and b.task_id=c.id and c.status=1 \
+                and b.ran_times<b.times and b.id>0 order by rand()" % (
+            self.id)
+        print(sql)
+
+        res = self.db.select_sql(sql)
+        task = {}
+        self.tasks = []
+        for row in res:
+            task = {
+                'task_id': row[1],
+                'start_time': 0,
+                'end_time': 0,
+                'times': 0,
+                'ran_times': 0,
+                'is_default': False
+            }
+            self.tasks.append(task)
     
     @staticmethod
     def can_run_default(db, server_id, vm_id, tty, uty ):
@@ -65,7 +86,7 @@ class TaskGroup(object):
             sql = sql + " user_type = 0 and terminal_type=2"
         elif uty != 0 and tty==1:
             sql = sql + " user_type != 0 and terminal_type=1"
-        elif uty != 0 and tty==1:
+        elif uty != 0 and tty==2:
             sql = sql + " user_type != 0 and terminal_type=2"
         sql = sql % (server_id, vm_id)
         # logger.info(sql)
@@ -349,6 +370,13 @@ class TaskGroup(object):
 
     def choose_vaild_task(self, server_id, vm_id=None):
         self.__initValidTasks()
+        for t in self.tasks:
+            task_id = t["task_id"]
+            return Task(t["task_id"], False, self.db)
+        return None
+
+    def choose_vaild_task2(self, server_id, vm_id=None):
+        self.__initValidTasks2()
         for t in self.tasks:
             task_id = t["task_id"]
             return Task(t["task_id"], False, self.db)

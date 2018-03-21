@@ -39,14 +39,14 @@ class TaskProfile(object):
 
     def get_task_type(self, task_id):
         sql = '''select
-        type,user_type,terminal_type,standby_time,timeout,copy_cookie,click_mode from
+        type,user_type,terminal_type,standby_time,timeout,copy_cookie,click_mode,inter_time from
         vm_task where id=%d ''' % (
             task_id)
         res = self.db.select_sql(sql)
         if not res:
-            return None, None, None, None, None ,None, None
+            return None, None, None, None, None ,None, None, None
         return (res[0][0], res[0][1], res[0][2], res[0][3], res[0][4],res[0][5]
-            ,res[0][6])
+            ,res[0][6], res[0][7])
 
     def get_reenable_day(self, task_type):
         sql = "select re_enable_hour_start_range,re_enable_hour_end_range from vm_task_reenable "\
@@ -123,8 +123,8 @@ class TaskProfile(object):
         if task_group_id == 0:
             is_default = True
         (task_type, user_type, terminal_type,standby_time, timeout, copy_cookie,
-        click_mode) = self.get_task_type(task_id)
-        print standby_time
+        click_mode, inter_time) = self.get_task_type(task_id)
+        print standby_time,inter_time
         standby_time_arr = standby_time.split(",")
         print "time_arr", standby_time_arr
         stimes = map(int, standby_time_arr)
@@ -159,11 +159,11 @@ class TaskProfile(object):
 
         sql = '''insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,
         task_group_id,status,start_time,oprcode,ran_minutes,user_type,
-        terminal_type,standby_time, timeout, copy_cookie,click_mode)
-         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d)''' %(
+        terminal_type,standby_time, timeout, copy_cookie,click_mode,inter_time)
+         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d,%d)''' %(
             self.server_id, vm_id, task_id, profile_id, task_group_id,
             -1, oprcode,user_type, terminal_type, randtime, timeout,
-            copy_cookie, click_mode)
+            copy_cookie, click_mode, inter_time)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
@@ -234,4 +234,4 @@ if __name__ == '__main__':
     logger = get_default_logger()
     #pc = ParallelControl(g_serverid, dbutil)
     t = TaskProfile(1, dbutil, None, logger)
-    t.set_cur_task_profile(1, 500, 500,1)
+    t.set_cur_task_profile(1, 410, 410,1)
