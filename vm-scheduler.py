@@ -238,7 +238,6 @@ def main_loop():
 
         except:
             logger.error('exception on main_loop', exc_info=True)
-            dbutil.rollback()
             time.sleep(3)
         logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
 
