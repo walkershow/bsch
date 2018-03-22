@@ -29,7 +29,16 @@ script_path = None
 # task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
 task_script_names = ['bdads.py', 'sgads.py', '360ads.py']
 tempdir = r'C:\Users\Administrator\AppData\Local\Temp'
+wssc_path = None
 
+def closeprocess(pname):
+    try:
+        command = "taskkill /F /IM {0}.exe".format(pname)
+        print command
+        os.popen(command)
+        return True
+    except Exception, e:
+        return False
 
 class LASTINPUTINFO(ctypes.Structure):
     """docstring for LASTINPUTINFO"""
@@ -54,8 +63,9 @@ def get_last_input():
 
 
 def autoargs():
-    global vm_id, server_id
+    global vm_id, server_id, wssc_path
     cur_cwd = os.getcwd()
+    wssc_path = cur_cwd
     dirs = cur_cwd.split('\\')
     vmname = dirs[-2]
     vm_id = int(vmname[1:])
@@ -141,7 +151,7 @@ def init():
 
 def get_max_update_time():
     # sql = "select max(UNIX_TIMESTAMP(a.update_time))  from vm_cur_task a where a.server_id=%d and vm_id=%d group by server_id, vm_id"%(server_id,vm_id)
-    sql = "select id,cur_task_id,UNIX_TIMESTAMP(a.update_time),task_group_id from vm_cur_task a where a.server_id=%d and status in (1,2)" % (
+    sql = "select id,cur_task_id,UNIX_TIMESTAMP(a.update_time),task_group_id, terminal_type from vm_cur_task a where a.server_id=%d and status in (1,2)" % (
         server_id)
     # sql = "select  a.id,a.vm_id,max(UNIX_TIMESTAMP(a.update_time)) max_ut from vm_cur_task a where a.server_id=%d "%(server_id)
     res = dbutil.select_sql(sql)
@@ -149,7 +159,7 @@ def get_max_update_time():
     if not res:
         return vms_time
     for r in res:
-        vms_time[r[1]] = {"id": r[0], "ut": r[2], "gid": r[3]}
+        vms_time[r[1]] = {"id": r[0], "ut": r[2], "gid": r[3],"tty":r[4]}
     return vms_time
 
 
@@ -205,6 +215,7 @@ def kill_zombie_proc(interval=140):
         id = item['id']
         time = item['ut']
         gid = item['gid']
+        tty = item['tty']
         if not time:
             continue
         if time >= redial_time:
@@ -225,7 +236,7 @@ def kill_zombie_proc(interval=140):
     return vm_ids
 
 
-def runcmd(task_id, id, task_type, task_group_id):
+def runcmd(task_id, id, task_type, task_group_id, terminal_type):
     # if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
         # script_name = task_script_names[task_type]
     # elif task_group_id == 0:
@@ -249,17 +260,21 @@ def runcmd(task_id, id, task_type, task_group_id):
 
 
 def new_task_come():
-    sql = '''select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.user_type,b.timeout,
-    b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id
-    and a.status=-1 and a.server_id=%d and a.vm_id=%d''' % (int(server_id),
-                                                            int(vm_id))
+    # sql = '''select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.user_type,b.timeout,
+    # b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id
+    # and a.status=-1 and a.server_id=%d and a.vm_id=%d''' % (int(server_id),
+    #                                                         int(vm_id))
+    sql = '''select id,cur_task_id,oprcode,cur_profile_id,user_type,timeout,standby_time,task_group_id,
+    terminal_type from vm_cur_task where status=-1 and server_id=%d and vm_id=%d''' % (int(server_id),
+                                                             int(vm_id))
+ 
     # logger.debug(sql)
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if not res:
-        return None, None, None, None, None, None, None, None
+        return None, None, None, None, None, None, None, None, None
     return res[0][0], res[0][1], res[0][2], res[0][3], res[0][4], res[0][
-        5], res[0][6], res[0][7]
+        5], res[0][6], res[0][7], res[0][8]
 
 
 def set_task_status(status, id):
@@ -352,9 +367,36 @@ def get_script_name(task_id, task_group_id, user_type = None):
         # script_name = task_script_names[user_type]
     return script_name
 
+def clear_timeout_task(): 
+    sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
+    where status in (1,2) and server_id=%d and vm_id=%d
+    and ran_minutes>timeout+2''' % (server_id, vm_id)
+    logger.info(sql)
+    res = dbutil.select_sql(sql)
+    if res:
+        print res
+        for r in res:
+            id = r[0]
+            task_id = r[1]
+            task_group_id = r[2]
+            tty = r[3]
+            user_type = r[4]
+            script_name = get_script_name(task_id, task_group_id,user_type)
+            cmd_findstr = script_name + " -t %d" % (id)
+            logger.info("find proc cmdline:%s", cmd_findstr)
+            proc = find_proc_by_cmdline(cmd_findstr)
+            if not proc:
+                print cmd_findstr, "is not exist"
+                print "task is not running"
+                set_task_status(7, id)
+            else:
+                logger.info("kill timeout task:%s", cmd_findstr )
+                print "kill timeout task:", cmd_findstr 
+                proc.kill()
+                set_task_status(6, id)
 
 def del_timeout_task():
-    sql = '''select id,cur_task_id,task_group_id,user_type from vm_cur_task
+    sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
     where status in (1,2) and server_id=%d and vm_id=%d''' % (server_id, vm_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
@@ -364,7 +406,8 @@ def del_timeout_task():
             id = r[0]
             task_id = r[1]
             task_group_id = r[2]
-            user_type = r[3]
+            tty = r[3]
+            user_type = r[4]
             script_name = get_script_name(task_id, task_group_id,user_type)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
@@ -384,7 +427,36 @@ def del_timeout_task():
             #             return
             # set_task_status(7,id)
 
+def get_firefox():
+    proc_list = []
+    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+        # print proc.info['name']
+        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+            # print proc.info['cmdline']
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find( "firefox.exe --marionette") != -1:
+                print proc.info['cmdline']
+                proc_list.append(proc)
+    return proc_list
 
+def clean_all_firefox():
+        plist = get_firefox()
+        if len(plist) >= 6:
+            print "****************firefox too much********************"
+            closeprocess("firefox")
+            closeprocess("geckodriver")
+            sleep(3)
+            for i in range(1,5):
+                if len(plist) <=0:
+                    break
+                plist = get_firefox()
+                if len(plist) >0:
+                    closeprocess("firefox")
+                    closeprocess("geckodriver")
+                    time.sleep(2)
+
+            print "********************clean all process********************"
+    
 def update_status_and_time(db):
     sql = "update vm_list set `status` = 1, update_time = CURRENT_TIMESTAMP where server_id = %s and vm_id = %s" % (
         server_id, vm_id)
@@ -422,7 +494,6 @@ def clear_on_newday(temp_dir):
         logger.info("==========clear tempdir on new day end==========")
 
 
-
 def main():
     myapp = singleton.singleinstance("wssc.py")
     myapp.run()
@@ -431,18 +502,21 @@ def main():
         while True:
             try:
                 while True:
+                    clean_all_firefox()
                     clear_on_newday(tempdir)
-                    id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id = new_task_come(
+                    id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id, terminal_type = new_task_come(
                     )
                     if id is not None:
+                        os.system(os.path.join(wssc_path,"ntupdate.bat"))
                         print "get task", task_id
-                        ret = runcmd(task_id, id, task_type, task_group_id)
+                        ret = runcmd(task_id, id, task_type, task_group_id, terminal_type)
                         if ret:
                             set_task_status(1, id)
                         else:
                             update_latest_profile_status(
                                 task_id, profile_id, 3)
                             set_task_status(3, id)
+                    clear_timeout_task()
                     del_timeout_task()
                     kill_zombie_proc()
                     time.sleep(3)
@@ -461,7 +535,8 @@ def main():
 
 def test_clear():
     init()
-    clear_on_newday("d:\profiles")
+    get_create_time()
+    # clear_on_newday("d:\profiles")
 
 if __name__ == "__main__":
     while True:
