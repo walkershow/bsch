@@ -294,11 +294,12 @@ class TaskAllot(object):
                     logger.info(
                         "====================handle gid:%d====================",
                         gid)
-                    if self.wait_interval(gid):
-                        logger.info("gid:%d should wait 5 mins", gid)
-                        continue
                     try:
                         with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
+                            # 放在里面否则可能出现多个任务不按间隔时间跑
+                            if self.wait_interval(gid):
+                                logger.info("gid:%d should wait 5 mins", gid)
+                                continue
                             if self.right_to_allot(gid):
                                 logger.info("get valid gid:%d", gid)
                             else:
