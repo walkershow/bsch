@@ -172,16 +172,9 @@ class UserAllot(object):
         return True
 
     def add_allot_succ_times(self, task_group_id, day):
-        sql = '''update vm_task_runtimes_config set allot_succ_times=allot_succ_times+1 where task_group_id=%d and day=%d''' % (
-            task_group_id, day)
-        ret = self.db.execute_sql(sql)
-        self.logger.info(sql)
-        if ret < 0:
-            raise UserAllotError, "%s excute error;ret:%d" % (sql, ret)
-
-    def decrease_allot_times(self, task_group_id, day):
         sql = '''update vm_task_runtimes_config set
-        users_used_amount=users_used_amount-1 where task_group_id=%d and day=%d''' % (
+        users_used_amount=users_used_amount+1, allot_succ_times=allot_succ_times+1
+        where task_group_id=%d and day=%d''' % (
             task_group_id, day)
         ret = self.db.execute_sql(sql)
         self.logger.info(sql)
@@ -198,7 +191,7 @@ class UserAllot(object):
             raise UserAllotError, "%s excute error;ret:%d" % (sql_tmp, ret)
 
     def reset_runtimes_config(self, task_group_id, times_one_day):
-        sql = "update vm_task_runtimes_config set users_used_amount=0,remained=1,allot_succ_times=0,allocated_server=''"\
+        sql = "update vm_task_runtimes_config set users_used_amount=0,allot_succ_times=0,allocated_server=''"\
             " where task_group_id=%d and used_out_time<current_date and users_used_amount>=%d" % (
                 task_group_id, int(times_one_day))
         self.logger.info(sql)
@@ -226,51 +219,31 @@ class UserAllot(object):
             return False
         days = self.runnable_statistic(task_group_id, task_id, 1,
                                        times_one_day)
-        print "runnable days:", days
+        print days
+        days_str = ",".join(str(s) for s in days)
+        logger.info("runnable days:%s",days_str)
+        # print "runnable days:", days
         if not days:
             self.logger.warn(
                 utils.auto_encoding("该任务组:%d没有可执行的用户名额"), task_group_id)
             return False
 
         for day in days:
-            if not self.unavail_day.has_key(vm_id):
-                self.unavail_day[vm_id] = set()
-            if day in self.unavail_day[vm_id]:
-                self.logger.info(
-                    utils.auto_encoding("vm_id:%d , %d day 无可用分配使用的用户或名额"),
-                    vm_id, day)
-                continue
-            if self.has_oper_priv(task_group_id, day, times_one_day, s_info):
-                self.logger.info(
-                    utils.auto_encoding("距离现在第%d天有可分配使用的用户名额"), day)
-                if not self.task_profile.set_cur_task_profile(
-                        vm_id, task_id, task_group_id, day):
-                    self.logger.warn(
-                        utils.auto_encoding(
-                            "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
-                        task_group_id, day)
-                    #self.set_remained(task_group_id, day)
-                    if self.use_cache:
-                        self.unavail_day[vm_id].add(day)
-
-                    self.logger.warn("release priv")
-                    self.decrease_allot_times(task_group_id, day)
-                    continue
-                else:
-                    self.logger.info(
-                        utils.auto_encoding(
-                            "task_group_id:%d,day:%d 成功分配到执行用户"),
-                        task_group_id, day)
-                    self.add_allot_succ_times(task_group_id, day)
-                    return True
-            else:
+            if not self.task_profile.set_cur_task_profile(
+                    vm_id, task_id, task_group_id, day):
                 self.logger.warn(
-                    utils.auto_encoding("该任务组:%d,第%d天的没有获取到执行用户名额"),
+                    utils.auto_encoding(
+                        "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
                     task_group_id, day)
-                if self.use_cache:
-                    self.unavail_day[vm_id].add(day)
-                self.logger.warn("release priv")
-                self.decrease_allot_times(task_group_id, day)
+
+                continue
+            else:
+                self.logger.info(
+                    utils.auto_encoding(
+                        "task_group_id:%d,day:%d 成功分配到执行用户"),
+                    task_group_id, day)
+                self.add_allot_succ_times(task_group_id, day)
+                return True
         return False
 
 
