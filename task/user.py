@@ -221,7 +221,7 @@ class UserAllot(object):
                                        times_one_day)
         print days
         days_str = ",".join(str(s) for s in days)
-        logger.info("runnable days:%s",days_str)
+        self.logger.info("runnable days:%s",days_str)
         # print "runnable days:", days
         if not days:
             self.logger.warn(
