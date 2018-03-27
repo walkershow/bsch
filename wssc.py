@@ -225,7 +225,7 @@ def kill_zombie_proc(interval=140):
                 logger.info("===========task proc:%d is not acting======", tid)
                 logger.info("task_id:%d,id:%d redial_time-stime>140", tid, id)
                 set_task_status(8, id)
-                script_name = get_script_name(tid, gid)
+                script_name = get_script_name(tid, gid, None, tty)
                 cmd_findstr = script_name + " -t %d" % (id)
                 proc = find_proc_by_cmdline(cmd_findstr)
                 kill_proc_by_pid(proc)
@@ -245,7 +245,8 @@ def runcmd(task_id, id, task_type, task_group_id, terminal_type):
         # script_name = get_task_scriptfile(task_id)
     # else:
         # script_name = str(task_id) + ".py"
-    script_name = get_script_name(task_id, task_group_id, task_type)
+    script_name = get_script_name(task_id, task_group_id, task_type,
+            terminal_type)
     script = os.path.join(script_path, script_name)
     # script = get_task_scriptfile(task_id)
     print "script:", script
@@ -346,13 +347,15 @@ def notify_vpn_redial():
         logger.error("sql:%s, ret:%d", sql, ret)
 
 
-def get_script_name(task_id, task_group_id, user_type = None):
+def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
     if user_type is None:
         user_type = get_user_type(task_id)
     if user_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
         script_name = task_script_names[user_type]
-    elif task_group_id == 0:
+    elif task_group_id == 0 and terminal_type==1:
         script_name = "0.py"
+    elif task_group_id == 0 and terminal_type==2:
+        script_name = "0p.py"
     elif task_group_id >= 50000:
         script_name = get_task_scriptfile(task_id)
     else:
@@ -381,7 +384,7 @@ def clear_timeout_task():
             task_group_id = r[2]
             tty = r[3]
             user_type = r[4]
-            script_name = get_script_name(task_id, task_group_id,user_type)
+            script_name = get_script_name(task_id, task_group_id,user_type, tty)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
@@ -408,7 +411,7 @@ def del_timeout_task():
             task_group_id = r[2]
             tty = r[3]
             user_type = r[4]
-            script_name = get_script_name(task_id, task_group_id,user_type)
+            script_name = get_script_name(task_id, task_group_id,user_type, tty)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
