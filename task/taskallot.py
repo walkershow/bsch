@@ -50,7 +50,6 @@ class TaskAllot(object):
         today = datetime.date.today()
         print today, self.cur_date
         if today != self.cur_date:
-            self.user.clear_cache()
             self.cur_date = today
 
             # #统一到一个w = 1的进程进行更新

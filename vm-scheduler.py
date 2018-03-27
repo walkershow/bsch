@@ -24,7 +24,7 @@ import vm_utils
 import utils
 import task.parallel
 from task.parallel import ParallelControl
-from task.user import UserAllot
+from task.rolling_user import UserAllot
 from logbytask.logtask import LogTask
 from manvm import CManVM
 global g_vManager_path
@@ -186,8 +186,6 @@ def main_loop():
             #     os._exit(0)
             #     break
             # reset_vms_oneday()
-            b_uc = is_use_cache()
-            g_user.set_use_cache(b_uc)
             for i in range(0, len(vm_ids)):
                 sqltmp = sql % (g_serverid, vm_ids[i])
                 # print sqltmp
