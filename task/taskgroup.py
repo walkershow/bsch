@@ -82,6 +82,8 @@ class TaskGroup(object):
         and ran_times>=run_times and ran_times>0 and server_id=%d and vm_id=%d and'''
         if uty == 0 and tty ==1:
             sql = sql + " user_type = 0 and terminal_type=1"
+        elif uty == 6 and tty ==1:
+            sql = sql + " user_type = 6 and terminal_type=1"
         elif uty == 0 and tty==2:
             sql = sql + " user_type = 0 and terminal_type=2"
         elif uty != 0 and tty==1:
@@ -102,11 +104,14 @@ class TaskGroup(object):
     def getDefaultTask(db, server_id, vm_id, not_baidu = 0):
         sql = "select id,user_type,terminal_type from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
                 and ran_times<run_times and server_id=%d and vm_id=%d"
-        if not_baidu > 0 :
-            sql = sql + " and user_type>0"
+        if not_baidu == 0:
+            sql = sql + " and user_type=0"
+            sql = sql % (server_id, vm_id)
+        elif not_baidu == 6:
+            sql = sql + " and user_type=6"
             sql = sql % (server_id, vm_id)
         else:
-            sql = sql + " and user_type=0"
+            sql = sql + " and user_type>0"
             sql = sql % (server_id, vm_id)
 
         # logger.info(sql)
@@ -116,8 +121,10 @@ class TaskGroup(object):
         task_id_list            = []
         task_id_list_pc_baidu   = [10000]
         task_id_list_mobi_baidu = [10006]
-        task_id_list_pc         = [None,10001, 10002, 10003, 10004, 10005]
-        task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011]
+        task_id_list_pc         = [None,10001, 10002, 10003, 10004, 10005,
+        10012]
+        task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011, 
+        None]
         print res
         if res:
             for r in res:
@@ -138,7 +145,10 @@ class TaskGroup(object):
                     task_id_list = task_id_list_mobi
                 else:
                     logger.error("unkonw tty:%d,uty:%d",tty, uty)
+                print task_id_list
                 task_id = task_id_list[uty]
+                print "get task_id",task_id
+                if task_id is None:continue
                 task = {
                     'id': id,
                     'task_id': task_id,
@@ -150,6 +160,8 @@ class TaskGroup(object):
                 }
                 dtask.append(task)
         else:
+            return None
+        if len(dtask)==0:
             return None
         task = choice(dtask)
         return Task(task["task_id"], True, db, task['id'])

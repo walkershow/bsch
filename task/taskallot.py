@@ -280,6 +280,9 @@ class TaskAllot(object):
             task = self.allot_by_default(vm_id, 0)
             if not task:
                 ret = False
+                task = self.allot_by_default(vm_id, 6)
+            if not task:
+                ret = False
                 task = self.allot_by_default(vm_id, 1)
             if not task:
                 ret = False
@@ -397,7 +400,8 @@ def getTask(dbutil):
     t = TaskAllot(0, 12, pc, user, dbutil)
 
     t.allot_by_default(2, 0)
-    t.allot_by_default(2, 1)
+    t.allot_by_default(2, 6)
+    # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
     # while True:
         # ret = t.allot_by_priority(5)
