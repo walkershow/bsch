@@ -394,16 +394,16 @@ def getTask(dbutil):
     from user import UserAllot
     pc = ParallelControl(11, dbutil, logger)
     user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(0, 15, pc, user, dbutil)
+    t = TaskAllot(0, 12, pc, user, dbutil)
 
-    #t.allot_by_default(5, 0)
-    #t.allot_by_default(5, 1)
+    t.allot_by_default(2, 0)
+    t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
-    while True:
-        ret = t.allot_by_priority(5)
-        print ret
-        time.sleep(5)
-        break
+    # while True:
+        # ret = t.allot_by_priority(5)
+        # print ret
+        # time.sleep(5)
+        # break
 
 
 def get_default_logger():
