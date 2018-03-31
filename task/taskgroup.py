@@ -79,7 +79,7 @@ class TaskGroup(object):
     def can_run_default(db, server_id, vm_id, tty, uty ):
         sql = '''select count(1) from zero_schedule_list where time_to_sec(NOW()) 
         between time_to_sec(start_time) and time_to_sec(end_time) 
-        and ran_times>=run_times and server_id=%d and vm_id=%d and'''
+        and ran_times>=run_times and ran_times>0 and server_id=%d and vm_id=%d and'''
         if uty == 0 and tty ==1:
             sql = sql + " user_type = 0 and terminal_type=1"
         elif uty == 0 and tty==2:
