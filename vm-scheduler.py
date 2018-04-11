@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 09.04.2018 11:07:1523243233
+# Last Modified Date: 09.04.2018 11:16:1523243773
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 """
 @Author: coldplay
@@ -19,6 +26,7 @@ import logging.config
 import dbutil
 from task.taskallot import TaskAllot
 import task.taskallot
+from task.taskallot_rolling import TaskAllotRolling
 import vms
 import vm_utils
 import utils
@@ -361,11 +369,14 @@ def init():
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
     global g_taskallot, g_logtask, g_task_profile, g_pc, g_user
-    task.taskallot.logger = logger
+    # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
     g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
-    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user, dbutil)
+    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
+            logger)
+    # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
+            # logger)
     g_logtask = LogTask(dbutil, logger)
     # g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
     global g_manvm

@@ -83,6 +83,12 @@ class SimpleFlock:
         os.close(self._fd)
         self._fd = None
 
+    def __del__(self):  
+        if self._fd:
+            fcntl.flock(self._fd, fcntl.LOCK_UN)
+            os.close(self._fd)
+            self._fd = None
+
 if __name__ == "__main__":
     print "Acquiring lock..."
     with SimpleFlock("locktest", 2):
