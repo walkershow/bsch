@@ -2,8 +2,20 @@
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 25.04.2018 09:27:1524619630
+# Last Modified Date: 25.04.2018 09:34:1524620062
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 24.04.2018 18:36:1524566187
+# Last Modified Date: 24.04.2018 18:36:1524566187
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 09.04.2018 11:07:1523243233
-# Last Modified Date: 09.04.2018 11:16:1523243773
+# Last Modified Date: 24.04.2018 18:32:1524565979
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 """
@@ -33,6 +45,7 @@ import utils
 import task.parallel
 from task.parallel import ParallelControl
 from task.rolling_user import UserAllot
+from task.user_ec import UserAllot_EC
 from logbytask.logtask import LogTask
 from manvm import CManVM
 global g_vManager_path
@@ -59,6 +72,7 @@ g_pb                 = 4
 g_pc                 = None
 exit_flag            = False
 g_user               = None
+g_userec               = None
 g_manvm              = None
 
 
@@ -368,13 +382,14 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user
+    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec
     # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
     g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
-    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
-            logger)
+    g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
+    g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
+            g_userec, dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)
