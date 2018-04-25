@@ -3,7 +3,7 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 09.04.2018 11:04:1523243045
+# Last Modified Date: 25.04.2018 09:38:1524620331
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -34,7 +34,7 @@ class TaskAllot(object):
     '''任务分配'''
     logger = None
 
-    def __init__(self, want_init, server_id, pc, user, db, logger):
+    def __init__(self, want_init, server_id, pc, user, user_ec, db, logger):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
@@ -42,6 +42,7 @@ class TaskAllot(object):
         self.selected_ids = []
         self.pc = pc
         self.user = user
+        self.user_ec = user_ec
         self.logger = logger
         # self.lock = utils.Lock("/tmp/lock-sched.lock")
 
@@ -334,13 +335,26 @@ class TaskAllot(object):
             ret = False
         return ret
 
+    def get_task_type(self, task_id):
+        sql = '''select user_type from vm_task where id=%d ''' % (
+            task_id)
+        res = self.db.select_sql(sql)
+        if not res:
+            return None 
+        return res[0][0]
+
     def handle_taskgroup(self, task_group_id, vm_id):
         tg = TaskGroup(task_group_id, self.db)
         task = tg.choose_vaild_task(self.server_id, vm_id)
         if not task:
             return None
         self.logger.warn("==========get the valid task:%d==========", task.id)
-        ret = self.user.allot_user(vm_id, task_group_id, task.id)
+        uty = self.get_task_type(task.id)
+        self.logger.info("task uty:%d", uty)
+        if uty >= 20:
+            ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
+        else:
+            ret = self.user.allot_user(vm_id, task_group_id, task.id)
         print "the allot user ret", ret
         if not ret:
             self.logger.warn(
