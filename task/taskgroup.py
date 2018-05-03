@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : taskgroup.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 03.05.2018 19:21:1525346483
+# Last Modified Date: 03.05.2018 19:21:1525346483
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
 @Author: coldplay
@@ -82,8 +89,8 @@ class TaskGroup(object):
         and ran_times>=run_times and ran_times>0 and server_id=%d and vm_id=%d and'''
         if uty == 0 and tty ==1:
             sql = sql + " user_type = 0 and terminal_type=1"
-        elif uty == 6 and tty ==1:
-            sql = sql + " user_type = 6 and terminal_type=1"
+        elif uty == 7 and tty ==1:
+            sql = sql + " user_type = 7 and terminal_type=1"
         elif uty == 0 and tty==2:
             sql = sql + " user_type = 0 and terminal_type=2"
         elif uty != 0 and tty==1:
@@ -107,8 +114,8 @@ class TaskGroup(object):
         if not_baidu == 0:
             sql = sql + " and user_type=0"
             sql = sql % (server_id, vm_id)
-        elif not_baidu == 6:
-            sql = sql + " and user_type=6"
+        elif not_baidu == 7:
+            sql = sql + " and user_type=7"
             sql = sql % (server_id, vm_id)
         else:
             sql = sql + " and user_type>0"
@@ -122,9 +129,9 @@ class TaskGroup(object):
         task_id_list_pc_baidu   = [10000]
         task_id_list_mobi_baidu = [10006]
         task_id_list_pc         = [None,10001, 10002, 10003, 10004, 10005,
-        10012]
+        10012, 10012]
         task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011, 
-        None]
+        None, None]
         print res
         if res:
             for r in res:

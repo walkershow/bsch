@@ -3,7 +3,7 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 25.04.2018 09:38:1524620331
+# Last Modified Date: 03.05.2018 19:14:1525346091
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -286,9 +286,14 @@ class TaskAllot(object):
             #if not task:
             #    ret = False
             #    task = self.allot_by_default(vm_id, 6)
+            #360
             if not task:
                 ret = False
                 task = self.allot_by_default(vm_id, 1)
+            #58
+            if not task:
+                ret = False
+                task = self.allot_by_default(vm_id, 7)
             if not task:
                 ret = False
                 self.reset_when_newday()
