@@ -3,7 +3,7 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 03.05.2018 19:14:1525346091
+# Last Modified Date: 03.05.2018 19:25:1525346744
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -356,7 +356,7 @@ class TaskAllot(object):
         self.logger.warn("==========get the valid task:%d==========", task.id)
         uty = self.get_task_type(task.id)
         self.logger.info("task uty:%d", uty)
-        if uty >= 20:
+        if uty == 6:
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id)
