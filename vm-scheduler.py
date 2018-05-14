@@ -2,22 +2,15 @@
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 25.04.2018 09:27:1524619630
-# Last Modified Date: 25.04.2018 09:34:1524620062
+# Date              : 14.05.2018 14:13:1526278391
+# Last Modified Date: 14.05.2018 14:13:1526278391
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 24.04.2018 18:36:1524566187
-# Last Modified Date: 24.04.2018 18:36:1524566187
+# Date              : 14.05.2018 11:57:1526270222
+# Last Modified Date: 14.05.2018 11:57:1526270222
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 09.04.2018 11:07:1523243233
-# Last Modified Date: 24.04.2018 18:32:1524565979
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
 """
 @Author: coldplay
 @Date: 2017-03-20 10:56:47
@@ -48,6 +41,7 @@ from task.rolling_user import UserAllot
 from task.user_ec import UserAllot_EC
 from logbytask.logtask import LogTask
 from manvm import CManVM
+from random import choice
 global g_vManager_path
 global g_current_dir
 global g_reset
@@ -55,9 +49,9 @@ global g_origin_limit
 from dbutil import DBUtil  # use when multi db connection needed
 
 g_serverid           = 0
+g_rcv                = 0
 g_rto                = 0
 g_rto_tmp            = 0
-g_dsp                = ""
 g_taskallot          = None
 g_logtask            = None
 g_task_profile       = None
@@ -191,75 +185,63 @@ def can_take_task():
             return True
     return False
 
-
-def main_loop():
-    # reset()
-
-    # 获取运行状态,请求运行的vm
+def vm_business(vm_id):
     sql = "select a.vm_id from vm_cur_task a where a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
+    sqltmp = sql % (g_serverid, vm_id)
+    # print sqltmp
+    # logger.debug(sqltmp)
+    res = dbutil.select_sql(sqltmp)
+    if not res:
+        sqltmp = sql_count % (g_serverid, vm_id)
+        res = dbutil.select_sql(sqltmp)
+        count = 0
+        if res:
+            count = res[0][0]
+        # logger.warn("running task vm:%d,count:%d", vm_id, count)
+        if count < g_pb:
+            if not can_take_task():
+                logger.warn(
+                    utils.auto_encoding("vm:%d\
+                            没有可运行任务名额,只能跑零跑任务"), vm_id)
+            # logger.error(
+                # utils.auto_encoding("==========进入任务分配=========="))
+            ret = g_taskallot.allot_by_priority(
+                vm_id )
+            print "get task", ret
+            if not ret:
+                logger.warn(
+                    utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
+                    vm_id)
+        else:
+            logger.warn(
+                utils.auto_encoding('''虚拟机:%d
+                    当前运行任务数:%d>=%d'''),
+                vm_id, count, g_pb)
+    else:
+        logger.info(
+            utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
+            vm_id)
+
+def main_loop():
+    # 获取运行状态,请求运行的vm
     vm_names, vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1,2]
     # vm_names = ['w1', 'w2']
     while True:
         try:
-            # if shutdown_by_flag():
-            #     logger.info("exit the main loop!!!")
-            #     os._exit(0)
-            #     break
-            # reset_vms_oneday()
-            for i in range(0, len(vm_ids)):
-                sqltmp = sql % (g_serverid, vm_ids[i])
-                # print sqltmp
-                logger.debug(sqltmp)
-                res = dbutil.select_sql(sqltmp)
-                if not res:
-                    sqltmp = sql_count % (g_serverid, vm_ids[i])
-                    res = dbutil.select_sql(sqltmp)
-                    count = 0
-                    get_default = False
-                    if res:
-                        count = res[0][0]
-                    # logger.warn("running task vm:%d,count:%d", vm_ids[i], count)
-                    if count < g_pb:
-                        if not can_take_task():
-                            logger.warn(
-                                utils.auto_encoding("vm:%d\
-                                        没有可运行任务名额,只能跑零跑任务"), vm_ids[i])
-                            get_default = True
-                        logger.error(
-                            utils.auto_encoding("==========进入任务分配=========="))
-                        # dbutil.select_sql('''select * from vm_priv where id=1 for
-                        # update''')
-                        ret = g_taskallot.allot_by_priority(
-                            vm_ids[i] )
-                        print "get task", ret
-                        if not ret:
-                            # if task_id is None:
-                            logger.warn(
-                                utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
-                                vm_ids[i])
-                            # logger.error(
-                                # utils.auto_encoding(
-                                    # "==========进入任务分配结束=========="))
-                            # time.sleep(5)
-                            # continue
-                    else:
-                        logger.warn(
-                            utils.auto_encoding('''虚拟机:%d
-                                当前运行任务数:%d>=%d'''),
-                            vm_ids[i], count, g_pb)
-                else:
-                    logger.info(
-                        utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
-                        vm_ids[i])
-            logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
-            time.sleep(3)
+            if not g_rcv:
+                for i in range(0, len(vm_ids)):
+                    vm_id = vm_ids[i]
+                    vm_business(vm_id)
+            else:
+                vm_id = choice(vm_ids)
+                vm_business(vm_id)
+
 
         except:
             logger.error('exception on main_loop', exc_info=True)
             time.sleep(3)
-        logger.error(utils.auto_encoding("==========进入任务分配结束=========="))
 
 
 def reset():
@@ -326,13 +308,6 @@ def init():
         default="0",
         help="the server id,default is  0")
     parser.add_option(
-        "-a",
-        "--defaul_script_path",
-        dest="dsp",
-        default="d:\\jb\\%s\\jb\\20170411.jb",
-        help="default sciprt to replace,default is d:\jb\vmname\jb\20170411.jb"
-    )
-    parser.add_option(
         "-w",
         "--want_init",
         dest="winit",
@@ -344,10 +319,16 @@ def init():
         dest="rwt",
         default="120",
         help="reset waiting time,default is 120s")
+    parser.add_option(
+        "-a",
+        "--radmon choice vm",
+        dest="rcv",
+        default="0",
+        help="radmon choice vm defaul is 0(false)")
     (options, args) = parser.parse_args()
     global g_current_dir, g_reset
-    global g_serverid, g_rto, g_dsp, g_reset_waittime, g_pb
-    g_dsp = options.dsp
+    global g_serverid, g_rto, g_reset_waittime, g_pb, g_rcv
+    g_rcv = int(options.rcv)
     g_serverid = int(options.serverid)
     if g_serverid == 0:
         print "serverid is 0,exit"
