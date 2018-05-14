@@ -422,10 +422,10 @@ def getTask(dbutil, logger):
     from user import UserAllot
     pc = ParallelControl(11, dbutil, logger)
     user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(0, 12, pc, user, dbutil, logger)
+    t = TaskAllot(0, 12, pc, user, None, dbutil, logger)
 
     t.allot_by_default(2, 0)
-    t.allot_by_default(2, 6)
+    t.allot_by_default(2, 7)
     # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
     # while True:
@@ -437,7 +437,7 @@ def getTask(dbutil, logger):
 
 def get_default_logger():
     logger = logging.getLogger()
-    self.logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.DEBUG)
 
     # console logger
     ch = logging.StreamHandler()
@@ -446,7 +446,7 @@ def get_default_logger():
         "[%(asctime)s] [%(process)d] [%(module)s::%(funcName)s::%(lineno)d] [%(levelname)s]: %(message)s"
     )
     ch.setFormatter(formatter)
-    self.logger.addHandler(ch)
+    logger.addHandler(ch)
     return logger
 
 

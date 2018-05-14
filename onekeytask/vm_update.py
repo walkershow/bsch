@@ -40,7 +40,7 @@ def init():
     parser = optparse.OptionParser()
     parser.add_option("-i", "--ip", dest="db_ip", default="192.168.1.21",
             help="mysql database server IP addrss, default is 192.168.1.235" ) 
-    parser.add_option("-n", "--name", dest="db_name", default="vm2",
+    parser.add_option("-n", "--name", dest="db_name", default="vm3",
             help="database name, default is gamedb" ) 
     parser.add_option("-u", "--usrname", dest="username", default="vm",
         help="database login username, default is chinau" )
@@ -101,18 +101,9 @@ def find_kill_process(process_name_list):
     2.组成命令行
     3.查看匹配，并杀死
     '''
-    process_list = []
+    process_list = all_process_list()
     kill_process_id = []
     special_process = "vm_update.py" # self.process_name
-
-    # 命令行
-    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
-            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-        else:
-            proc.info["cmdline"] = None
-        process_list.append(proc)
-
 
     #查看后缀，py, bat 需要观察命令行
     for process_name in process_name_list:
@@ -137,20 +128,24 @@ def find_kill_process(process_name_list):
 
     return kill_process_id
 
-def restart_process():
+
+def restart_processes():
     process_cmd_list = get_restart_process_path_list()
     for process_cmd in process_cmd_list:
-        process = process_cmd.split(" ")[0]
-        (filepath,tempfilename) = os.path.split(process)
-        try:
-            SW_MINIMIZE = 6
-            info = subprocess.STARTUPINFO()
-            info.dwFlags = subprocess.STARTF_USESHOWWINDOW
-            info.wShowWindow = SW_MINIMIZE
+        restart_process(process_cmd)
 
-            p = subprocess.Popen(process_cmd, cwd = filepath, startupinfo=info, creationflags = subprocess.CREATE_NEW_CONSOLE)
-        except:
-            logger.error("fail to create process")
+def restart_process(process_cmd):
+    process = process_cmd.split(" ")[0]
+    (filepath,tempfilename) = os.path.split(process)
+    try:
+        SW_MINIMIZE = 6
+        info = subprocess.STARTUPINFO()
+        info.dwFlags = subprocess.STARTF_USESHOWWINDOW
+        info.wShowWindow = SW_MINIMIZE
+        logger.error(process_cmd)
+        p = subprocess.Popen(process_cmd, cwd = filepath, startupinfo=info, creationflags = subprocess.CREATE_NEW_CONSOLE)
+    except:
+        logger.error("fail to create process")
 
 def kill_process():
     process_list = get_kill_process_name_list()
@@ -202,7 +197,7 @@ def update_status_and_time(db):
 def update_thread_func():
     while True:
         try:
-            db = dbutil.DBUtil(logger, '192.168.1.21', 3306, 'vm2', 'vm', '123456', 'utf8')
+            db = dbutil.DBUtil(logger, '192.168.1.21', 3306, 'vm3', 'vm', '123456', 'utf8')
             while True:
                 update_time_internal = int(get_update_time(db))
                 res = update_status_and_time(db)
@@ -212,6 +207,26 @@ def update_thread_func():
                 logger.error("on fuck up update")
         except Exception as e:
             logger.error(e)
+
+def all_process_list():
+    process_list = []
+    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+        else:
+            proc.info["cmdline"] = None
+        process_list.append(proc)
+    return process_list
+
+def check_wssc_exist():
+    process_list = all_process_list()
+    found = False
+    for proc in process_list:
+        if proc.info["cmdline"] is not None and proc.info["cmdline"].find("wssc") != -1:
+            found = True
+    if found == False:
+        real_path = format_cmd(r"Z:\${sid}\w${vid}\script\wssc.bat", "", server_id , vm_id)
+        restart_process(real_path)
 
 def main():
     myapp = singleton.singleinstance("vm_update.py")
@@ -236,6 +251,7 @@ def main():
                 kill_process()
 
             for r in res:
+                count = 0
                 # check update
                 while True:
                     computer_sql = "select computer_cmd_id from cmd_mapping where vm_cmd_id = %d" %(r["cmd_id"])
@@ -247,9 +263,14 @@ def main():
                     has_update_sql = "select status from vm_onekey_task where server_id = %s and cmd_id = %s" %(server_id, computer_cmd_id)
                     has_update_res = dbutil.select_sqlwithdict(has_update_sql)
                     if has_update_res[0]["status"] == 1:
+                        if count >= 5:
+                            kill_process()
                         break
                     else:
                         print("wait for transport")
+                        count = count + 1
+                        if count == 5:
+                            restart_processes()
                         time.sleep(5)
                 server_ip = get_server_ip()
                 if server_id is None:
@@ -274,8 +295,10 @@ def main():
                 time.sleep(5)
 
             if len(res) != 0:
-                restart_process()
+                #reboot()
+                restart_processes()
                 restart_self()
+            check_wssc_exist()
         except Exception:
             logger.error(
                 'exception on reset ', exc_info=True)
