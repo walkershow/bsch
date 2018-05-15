@@ -2,14 +2,32 @@
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 14.05.2018 14:13:1526278391
-# Last Modified Date: 14.05.2018 14:13:1526278391
+# Date              : 15.05.2018 17:46:1526377570
+# Last Modified Date: 15.05.2018 17:46:1526377570
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 14.05.2018 11:57:1526270222
-# Last Modified Date: 14.05.2018 11:57:1526270222
+# Date              : 15.05.2018 17:45:1526377549
+# Last Modified Date: 15.05.2018 17:45:1526377549
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 15.05.2018 17:45:1526377517
+# Last Modified Date: 15.05.2018 17:45:1526377517
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 15.05.2018 17:43:1526377426
+# Last Modified Date: 15.05.2018 17:43:1526377426
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 14.05.2018 14:13:1526278391
+# Last Modified Date: 14.05.2018 14:13:1526278391
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 """
 @Author: coldplay
@@ -114,7 +132,16 @@ def is_use_cache():
         return True
     return False
 
+def is_run_as_single():
+    sql = '''select run_as_single from vm_server_list where
+    id=%d'''%(g_serverid)
+    res = dbutil.select_sql(sql)
+    if not res:
+        return 0
+    is_single = int(res[0][0])
+    return is_single
 
+    
 def reset_vms_oneday():
     global g_last_shutdown_time
     tlist = get_shutdown_time()
@@ -230,6 +257,8 @@ def main_loop():
     # vm_names = ['w1', 'w2']
     while True:
         try:
+            g_rcv = is_run_as_single()
+            print "gcv:", g_rcv
             if not g_rcv:
                 for i in range(0, len(vm_ids)):
                     vm_id = vm_ids[i]
