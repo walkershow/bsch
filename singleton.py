@@ -1,8 +1,16 @@
-from win32event import CreateMutex 
-from win32api import CloseHandle, GetLastError
-from winerror import ERROR_ALREADY_EXISTS
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : singleton.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 18.05.2018 14:35:1526625357
+# Last Modified Date: 18.05.2018 14:35:1526625357
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 import sys
 import time
+from win32api import CloseHandle, GetLastError
+from win32event import CreateMutex
+from winerror import ERROR_ALREADY_EXISTS
+
 
 class singleinstance: 
     """ Limits application to single instance """

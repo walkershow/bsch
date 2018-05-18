@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : utils.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 18.05.2018 11:21:1526613661
+# Last Modified Date: 18.05.2018 11:28:1526614104
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 import re
 import urllib2
@@ -27,6 +34,15 @@ def auto_encoding(str_enc):
     if sysstr == 'Windows':
        str_enc = str_enc.decode('utf-8').encode('gbk')
     return str_enc
+
+def is_windows():
+    sysstr = platform.system()
+    if sysstr == 'Windows':
+        return True
+    return False
+
+def tmp_dir():
+    return 'x:\\' if is_windows() else '/tmp'
 
 import os  
 import fcntl  

@@ -2,6 +2,18 @@
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 16.05.2018 11:39:1526441990
+# Last Modified Date: 16.05.2018 11:39:1526441990
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 16.05.2018 11:39:1526441971
+# Last Modified Date: 16.05.2018 11:39:1526441971
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
+# -*- coding: utf-8 -*-
+# File              : vm-scheduler.py
+# Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 15.05.2018 17:46:1526377570
 # Last Modified Date: 15.05.2018 17:46:1526377570
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
@@ -10,24 +22,6 @@
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 15.05.2018 17:45:1526377549
 # Last Modified Date: 15.05.2018 17:45:1526377549
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:45:1526377517
-# Last Modified Date: 15.05.2018 17:45:1526377517
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:43:1526377426
-# Last Modified Date: 15.05.2018 17:43:1526377426
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 14.05.2018 14:13:1526278391
-# Last Modified Date: 14.05.2018 14:13:1526278391
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 """
 @Author: coldplay
@@ -55,7 +49,7 @@ import vm_utils
 import utils
 import task.parallel
 from task.parallel import ParallelControl
-from task.rolling_user import UserAllot
+from task.rolling_user import UserAllot as UserAllot_Rolling
 from task.user_ec import UserAllot_EC
 from logbytask.logtask import LogTask
 from manvm import CManVM
@@ -396,7 +390,7 @@ def init():
     # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
-    g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
+    g_user = UserAllot_Rolling(g_serverid, g_pc, dbutil, logger)
     g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
             g_userec, dbutil, logger)

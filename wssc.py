@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : wssc.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 18.05.2018 11:23:1526613811
+# Last Modified Date: 18.05.2018 15:49:1526629794
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
  @Author: coldplay
@@ -5,69 +12,78 @@
  @Last Modified by:   coldplay
  @Last Modified time: 2017-04-12 14:29:23
 '''
-import sys
-import optparse
-import os
-import time
 import datetime
 import logging
 import logging.config
-import dbutil
-import subprocess
-import ctypes
-import traceback
-import singleton
-import psutil
+import optparse
+import os
 import shutil
-user32 = ctypes.windll.user32
-kernel32 = ctypes.windll.kernel32
+import subprocess
+import sys
+import time
+import traceback
+from utils import is_windows,tmp_dir
+import dbutil
+import psutil
+
+if is_windows():
+    import singleton
+    import ctypes
+    user32 = ctypes.windll.user32
+    kernel32 = ctypes.windll.kernel32
 
 cur_date = None
 cur_hour = None
 vm_id = 0
 server_id = 0
 script_path = None
-# task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
 task_script_names = ['bdads.py', 'sgads.py', '360ads.py','zgads.py','bingads.py','yahooads.py','bdads.py', '58ads.py']
-tempdir = 'x:\\'
+# tempdir = 'x:\\'
+tempdir = tmp_dir()
 wssc_path = None
+if is_windows():
+    python_exec = 'python'
+else:
+    python_exec = 'python2'
 
 def closeprocess(pname):
     try:
-        command = "taskkill /F /IM {0}.exe".format(pname)
+        if is_windows():
+            command = "taskkill /F /IM {0}.exe".format(pname)
+        else:
+            command = "pkill {0}".format(pname)
         print command
         os.popen(command)
         return True
     except Exception, e:
         return False
 
-class LASTINPUTINFO(ctypes.Structure):
-    """docstring for LASTINPUTINFO"""
-    _fields_ = [("cbSize", ctypes.c_long), ("dwTime", ctypes.c_ulong)]
+if is_windows():
 
+    class LASTINPUTINFO(ctypes.Structure):
+        """docstring for LASTINPUTINFO"""
+        _fields_ = [("cbSize", ctypes.c_long), ("dwTime", ctypes.c_ulong)]
 
-def get_last_input():
-    struct_lastinputinfo = LASTINPUTINFO()
-    struct_lastinputinfo.cbSize = ctypes.sizeof(LASTINPUTINFO)
+    def get_last_input():
+        struct_lastinputinfo = LASTINPUTINFO()
+        struct_lastinputinfo.cbSize = ctypes.sizeof(LASTINPUTINFO)
 
-    # 获得用户最后输入的相关信息
-    user32.GetLastInputInfo(ctypes.byref(struct_lastinputinfo))
-
-    # 获得机器运行的时间
-    run_time = kernel32.GetTickCount()
-
-    elapsed = run_time - struct_lastinputinfo.dwTime
-
-    # print "[*] It's been %d milliseconds since the last input event."%elapsed
-
-    return elapsed
+        # 获得用户最后输入的相关信息
+        user32.GetLastInputInfo(ctypes.byref(struct_lastinputinfo))
+        # 获得机器运行的时间
+        run_time = kernel32.GetTickCount()
+        elapsed = run_time - struct_lastinputinfo.dwTime
+        # print "[*] It's been %d milliseconds since the last input event."%elapsed
+        return elapsed
 
 
 def autoargs():
     global vm_id, server_id, wssc_path
     cur_cwd = os.getcwd()
     wssc_path = cur_cwd
-    dirs = cur_cwd.split('\\')
+    print cur_cwd
+    #dirs = cur_cwd.split('\\')
+    dirs = cur_cwd.split(os.sep)
     vmname = dirs[-2]
     vm_id = int(vmname[1:])
     server_id = int(dirs[-3])
@@ -238,45 +254,30 @@ def kill_zombie_proc(interval=140):
 
 
 def runcmd(task_id, id, task_type, task_group_id, terminal_type):
-    # if task_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
-        # script_name = task_script_names[task_type]
-    # elif task_group_id == 0:
-        # script_name = "0.py"
-    # elif task_group_id >= 50000:
-        # script_name = get_task_scriptfile(task_id)
-    # else:
-        # script_name = str(task_id) + ".py"
     script_name = get_script_name(task_id, task_group_id, task_type,
             terminal_type)
     script = os.path.join(script_path, script_name)
-    # script = get_task_scriptfile(task_id)
     print "script:", script
     if not os.path.exists(script):
         logger.error("script:%s not exists", script)
         return False
     os.chdir(script_path)
-    commands = ["python", script, "-t", str(id)]
+    commands = [python_exec, script, "-t", str(id)]
     process = subprocess.Popen(
         commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
     return True
 
 
 def new_task_come():
-    # sql = '''select a.id,a.cur_task_id,a.oprcode,a.cur_profile_id,b.user_type,b.timeout,
-    # b.standby_time,a.task_group_id from vm_cur_task a,vm_task b where a.cur_task_id=b.id
-    # and a.status=-1 and a.server_id=%d and a.vm_id=%d''' % (int(server_id),
-    #                                                         int(vm_id))
     sql = '''select id,cur_task_id,oprcode,cur_profile_id,user_type,timeout,standby_time,task_group_id,
     terminal_type from vm_cur_task where status=-1 and server_id=%d and vm_id=%d''' % (int(server_id),
                                                              int(vm_id))
  
-    # logger.debug(sql)
     logger.info(sql)
-    res = dbutil.select_sql(sql)
+    res = dbutil.select_sqlwithdict(sql)
     if not res:
-        return None, None, None, None, None, None, None, None, None
-    return res[0][0], res[0][1], res[0][2], res[0][3], res[0][4], res[0][
-        5], res[0][6], res[0][7], res[0][8]
+        return None
+    return res[0]
 
 
 def set_task_status(status, id):
@@ -421,15 +422,6 @@ def del_timeout_task():
                 print "task is not running"
                 set_task_status(7, id)
 
-            # for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-            #     if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
-            #         proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-            #         # print proc.info['cmdline']
-            #         if proc.info["cmdline"] is not None and proc.info["cmdline"].find(cmd_findstr) != -1:
-            #             print cmd_findstr, "is exist"
-            #             print "id", id ,"===task_id",task_id, " is running"
-            #             return
-            # set_task_status(7,id)
 
 def get_firefox():
     proc_list = []
@@ -519,33 +511,43 @@ def update_task_allot_impl_sub(task_group_id, task_id):
         if ret < 0:
             logger.error("update_task_allot_impl_sub")
 
+def ntp_update():
+    if is_windows():
+        ntppath = os.path.join(wssc_path,"ntupdate.bat")
+        commands = [python_exec, ntppath]
+        process = subprocess.Popen(
+            commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
+
+def run_as_single():
+    if is_windows():
+        myapp = singleton.singleinstance("wssc.py")
+        myapp.run()
+    
 def main():
-    myapp = singleton.singleinstance("wssc.py")
-    myapp.run()
+    run_as_single()
     init()
     try:
         while True:
             try:
                 while True:
                     clean_all_firefox()
-                    clear_by_hours(tempdir)
-                    closeprocess("WerFault")
-                    id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id, terminal_type = new_task_come(
-                    )
-                    if id is not None:
-                        ntppath = os.path.join(wssc_path,"ntupdate.bat")
-                        commands = ["python", ntppath]
-                        process = subprocess.Popen(
-                            commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
-                        print "get task", task_id
-                        ret = runcmd(task_id, id, task_type, task_group_id, terminal_type)
+                    if is_windows():
+                        clear_by_hours(tempdir)
+                        closeprocess("WerFault")
+                    r = new_task_come()
+                    if r is not None:
+                        ntp_update()
+                        print "get task", r['task_id ']
+                        ret = runcmd(r['task_id'], r['id'], r['task_type'],
+                                r['task_group_id'], r['terminal_type'])
                         if ret:
-                            set_task_status(1, id)
+                            set_task_status(1, r['id'])
                         else:
                             update_latest_profile_status(
-                                task_id, profile_id, 3)
-                            set_task_status(3, id)
-                            update_task_allot_impl_sub(task_group_id, task_id)
+                                r['task_id'], r['profile_id'], 3)
+                            set_task_status(3, r['id'])
+                            update_task_allot_impl_sub(r['task_group_id'],
+                                    r['task_id'])
                     clear_timeout_task()
                     del_timeout_task()
                     kill_zombie_proc()
@@ -570,11 +572,12 @@ def test_clear():
 
 if __name__ == "__main__":
     while True:
-        try:
+        # try:
+        if True:
             # clear_by_hours('d:\\profiles')
             main()
-        except Exception, e:
-            print 'traceback.print_exc():'
-            traceback.print_exc()
-            logger.error('exception on main_loop', exc_info=True)
-            time.sleep(5)
+        # except Exception, e:
+            # print 'traceback.print_exc():'
+            # traceback.print_exc()
+            # logger.error('exception on main_loop', exc_info=True)
+            # time.sleep(5)
