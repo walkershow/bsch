@@ -23,12 +23,13 @@ user32 = ctypes.windll.user32
 kernel32 = ctypes.windll.kernel32
 
 cur_date = None
+cur_hour = None
 vm_id = 0
 server_id = 0
 script_path = None
 # task_script_names = ['bdrank.py', 'sgrank.py', '360rank.py']
-task_script_names = ['bdads.py', 'sgads.py', '360ads.py']
-tempdir = r'C:\Users\Administrator\AppData\Local\Temp'
+task_script_names = ['bdads.py', 'sgads.py', '360ads.py','zgads.py','bingads.py','yahooads.py','bdads.py', '58ads.py']
+tempdir = 'x:\\'
 wssc_path = None
 
 def closeprocess(pname):
@@ -350,7 +351,7 @@ def notify_vpn_redial():
 def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
     if user_type is None:
         user_type = get_user_type(task_id)
-    if user_type in range(0, 6) and task_group_id != 0 and task_group_id<50000:
+    if user_type in range(0, 8) and task_group_id != 0 and task_group_id<50000:
         script_name = task_script_names[user_type]
     elif task_group_id == 0 and terminal_type==1:
         script_name = "0.py"
@@ -373,7 +374,7 @@ def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
 def clear_timeout_task(): 
     sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
     where status in (1,2) and server_id=%d and vm_id=%d
-    and ran_minutes>timeout+2''' % (server_id, vm_id)
+    and (ran_minutes>timeout+2  or TO_SECONDS(now())-TO_SECONDS(update_time)>500)''' % (server_id, vm_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
@@ -496,6 +497,27 @@ def clear_on_newday(temp_dir):
         os.mkdir(temp_dir)
         logger.info("==========clear tempdir on new day end==========")
 
+def clear_by_hours(temp_dir):
+    global cur_date,cur_hour
+    nowtime = datetime.datetime.now()
+    nowhour = nowtime.hour
+    print "nowhour:", nowhour, "====", "cur_hour:", cur_hour
+    if nowhour != cur_hour:
+        logger.info("==========clear tempdir on new hour start==========")
+        removePath(temp_dir)
+        cur_hour =nowhour 
+        os.mkdir(temp_dir)
+        logger.info("==========clear tempdir on new hour end==========")
+
+def update_task_allot_impl_sub(task_group_id, task_id):
+        format_data = {
+            "task_id": task_id,
+            "group_id": task_group_id
+        }
+        sql = "update vm_task_allot_impl set ran_times=ran_times - 1 where id = {group_id} and task_id = {task_id} and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)".format(**format_data)
+        ret = dbutil.execute_sql(sql)
+        if ret < 0:
+            logger.error("update_task_allot_impl_sub")
 
 def main():
     myapp = singleton.singleinstance("wssc.py")
@@ -506,11 +528,15 @@ def main():
             try:
                 while True:
                     clean_all_firefox()
-                    clear_on_newday(tempdir)
+                    clear_by_hours(tempdir)
+                    closeprocess("WerFault")
                     id, task_id, oprcode, profile_id, task_type, timeout, standby, task_group_id, terminal_type = new_task_come(
                     )
                     if id is not None:
-                        os.system(os.path.join(wssc_path,"ntupdate.bat"))
+                        ntppath = os.path.join(wssc_path,"ntupdate.bat")
+                        commands = ["python", ntppath]
+                        process = subprocess.Popen(
+                            commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
                         print "get task", task_id
                         ret = runcmd(task_id, id, task_type, task_group_id, terminal_type)
                         if ret:
@@ -519,6 +545,7 @@ def main():
                             update_latest_profile_status(
                                 task_id, profile_id, 3)
                             set_task_status(3, id)
+                            update_task_allot_impl_sub(task_group_id, task_id)
                     clear_timeout_task()
                     del_timeout_task()
                     kill_zombie_proc()
@@ -544,6 +571,7 @@ def test_clear():
 if __name__ == "__main__":
     while True:
         try:
+            # clear_by_hours('d:\\profiles')
             main()
         except Exception, e:
             print 'traceback.print_exc():'
