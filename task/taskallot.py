@@ -3,7 +3,7 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 03.05.2018 19:25:1525346744
+# Last Modified Date: 23.05.2018 21:23:1527081800
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -34,7 +34,7 @@ class TaskAllot(object):
     '''任务分配'''
     logger = None
 
-    def __init__(self, want_init, server_id, pc, user, user_ec, db, logger):
+    def __init__(self, want_init, server_id, pc, user, user_ec, user7, db, logger):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
@@ -43,6 +43,7 @@ class TaskAllot(object):
         self.pc = pc
         self.user = user
         self.user_ec = user_ec
+        self.user7 = user7
         self.logger = logger
         # self.lock = utils.Lock("/tmp/lock-sched.lock")
 
@@ -153,6 +154,72 @@ class TaskAllot(object):
             return res[0][0]
         return '1970-1-1 00:00:00'
 
+    def gen_rand_minutes(self, standby_time):
+        standby_time_arr = standby_time.split(",")
+        print "time_arr", standby_time_arr
+        stimes = map(int, standby_time_arr)
+        if len(stimes)==1:
+            stimes.append(stimes[0])
+        randtime = random.randint(stimes[0],stimes[1])
+        print "rantime",randtime
+        return randtime
+
+    def task_interval_setting(self, task_id):
+        sql = '''select interval_times,interval_min from vm_task where
+        id={0}'''.format(task_id)
+        res = dbutil.select_sql(sql)
+        if res:
+            times= res[0][0]
+            minutes = res[0][1]
+            ran_min = self.gen_rand_minutes(minutes)
+            return times,ran_min
+        return None,None
+        
+    def task_interval_info(self, task_id):
+        sql = '''select times,cur_times,minutes from vm_task_interval where
+        id={0}'''.format(task_id)
+        res = dbutil.select_sql(sql)
+        if res:
+            times= res[0][0]
+            cur_times= res[0][1]
+            minutes = res[0][2]
+            return times,cur_times,minutes
+        return None,None
+
+    def reset_task_interval(self, task_id):
+        ran_min = self.gen_rand_minutes(minutes)
+        sql = '''update vm_task_interval set
+        cur_times=0,minutes={0}'''.format(ran_min)
+        ret = dbutil.execute_sql(sql)
+        if ret<0:
+            logger.info("sql:%s exec failed %d", sql, ret)
+    
+    def log_task_interval_times(self, task_id):
+
+        times, minutes = self.task_interval_setting(task_id)
+        sql = ''' insert into vm_task_interval (task_id,
+                times,cur_times,minutes)
+        values({0},{1},1,{3}) on duplicate key update cur_times=cur_times+1'''.format(
+                task_id, times, minutes)
+
+        # sql = '''update vm_task_interval set
+        # cur_times=cur_times+1 where task_id=%d'''.format(task_id)
+        ret = dbutil.execute_sql(sql)
+        if ret<0:
+            logger.info("sql:%s exec failed %d", sql, ret)
+
+
+    def task_interval(self, task_id, stime):
+        times, cur_times, minutes = self.task_interval_info(task_id)
+        if cur_time < times:
+            return False
+        now = datetime.datetime.now()
+        if now-stime>minutes*60:
+            self.reset_task_interval(task_id)
+            return False
+        return True
+            
+        
     def right_to_allot_zero(self, task_id):
         #return True
         succ_time = self.task_last_succ_time(task_id)
@@ -190,6 +257,8 @@ class TaskAllot(object):
             else:
                 self.logger.warn("task_group_id:%d succ_time>=redial_time",
                                  task_group_id)
+            if self.task_interval(task_id, stime):
+                return False
         return False
 
     def get_candidate_gid(self, vm_id, type=1):
@@ -341,12 +410,12 @@ class TaskAllot(object):
         return ret
 
     def get_task_type(self, task_id):
-        sql = '''select user_type from vm_task where id=%d ''' % (
+        sql = '''select user_type,is_ad from vm_task where id=%d ''' % (
             task_id)
         res = self.db.select_sql(sql)
         if not res:
-            return None 
-        return res[0][0]
+            return None,None
+        return res[0][0],res[0][1]
 
     def handle_taskgroup(self, task_group_id, vm_id):
         tg = TaskGroup(task_group_id, self.db)
@@ -354,9 +423,12 @@ class TaskAllot(object):
         if not task:
             return None
         self.logger.warn("==========get the valid task:%d==========", task.id)
-        uty = self.get_task_type(task.id)
-        self.logger.info("task uty:%d", uty)
-        if uty == 6:
+        uty, is_ad = self.get_task_type(task.id)
+        self.logger.info("task uty:%d, is_ad:%d", uty, is_ad)
+        if is_ad:
+            #广告专享
+            ret = self.user7.allot_user(vm_id, task_group_id, task.id)
+        else if uty == 6:
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id)
@@ -389,6 +461,7 @@ class TaskAllot(object):
             # 只更新impl的值得,不更新group,(group由脚本更新)
             #     tg.add_ran_times(task_id)
             tg.add_impl_ran_times(task_id)
+            self.log_task_interval_times(task_id)
 
 
 def allot_test(dbutil):
