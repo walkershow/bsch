@@ -35,31 +35,82 @@ class TaskGroup(object):
     '''任务组'''
     tasks = []
 
-    def __init__(self, id, db):
-        self.id = id
+    def __init__(self,  db):
         self.db = db
+        self.task_group_dict={}
+        self.id = None
+        
+
+    def can_be_run(self, task_group_id, task_id):
+        sql = '''select 1 from vm_task_allot_impl a where 
+                     time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time)
+                     and a.ran_times<a.allot_times and a.id={0} and
+                     a.task_id={1} ''' .format(task_group_id, task_id)
+        print sql
+        res = self.db.select_sql(sql)
+        if res and len(res)>0:
+            return True
+        return False
+
 
     # groupid:0 表示默认任务
-    def __initValidTasks(self):
-        sql = "select b.id,b.task_id,a.start_time,a.end_time,a.allot_times,a.ran_times from vm_task_allot_impl a,vm_task_group b, vm_task c where b.id=%d \
-                and b.task_id=a.task_id and b.id =a.id and a.task_id=c.id and c.status=1 \
-                and time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time) \
-                and a.ran_times<a.allot_times and b.id>0 order by rand()" % (
-            self.id)
+    def __initValidTasks(self, task_group_id):
+        if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
+            print self.task_group_dict[task_group_id]    
+            self.id = task_group_id
+            return self.task_group_dict[task_group_id].pop()
+        else:
+            print "init task list"
+            # sql = "select b.id,b.task_id,a.start_time,a.end_time,a.allot_times,a.ran_times from vm_task_allot_impl a,vm_task_group b, vm_task c where b.id=%d \
+                    # and b.task_id=a.task_id and b.id =a.id and a.task_id=c.id and c.status=1 \
+                    # and time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time) \
+                    # and a.ran_times<a.allot_times and b.id>0 order by rand()" % (task_group_id)
+            sql = '''SELECT
+                b.id,
+                b.task_id,
+                a.start_time,
+                a.end_time,
+                a.allot_times,
+                a.ran_times
+            FROM
+            vm_task_allot_impl a,
+            vm_task_group b,
+            vm_task c
+            WHERE
+                b.id = {0}
+            AND b.task_id = a.task_id
+            AND b.id = a.id
+            AND a.task_id = c.id
+            AND c. STATUS = 1
+            AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+            AND time_to_sec(a.end_time)
+            AND a.ran_times < a.allot_times
+            AND b.id > 0
+            ORDER BY rand()'''.format(task_group_id)
+            # print sql
+            res = self.db.select_sql(sql)
+            task = {}
+            self.tasks = []
+            for row in res:
+                # task = {
+                    # 'task_id': row[1],
+                    # 'start_time': row[2],
+                    # 'end_time': row[3],
+                    # 'times': row[4],
+                    # 'ran_times': row[5],
+                    # 'is_default': False
+                # }
+                if not self.task_group_dict.has_key(task_group_id):
+                    print "init task_group_id:", task_group_id
+                    self.task_group_dict[task_group_id]=[row[1]]
+                else:
+                    print "append task"
+                    self.task_group_dict[task_group_id].append(row[1])
+            self.id = task_group_id
+            return self.task_group_dict[task_group_id].pop()
+        return None
 
-        res = self.db.select_sql(sql)
-        task = {}
-        self.tasks = []
-        for row in res:
-            task = {
-                'task_id': row[1],
-                'start_time': row[2],
-                'end_time': row[3],
-                'times': row[4],
-                'ran_times': row[5],
-                'is_default': False
-            }
-            self.tasks.append(task)
+         
 
     def __initValidTasks2(self):
         sql = "select b.id,b.task_id from vm_task_group b, vm_task c where b.id=%d \
@@ -386,11 +437,16 @@ class TaskGroup(object):
         TaskGroup.impl_task_templ(db, task_group_id)
         TaskGroup.impl_task_templ_detail(db, task_group_id)
 
-    def choose_vaild_task(self, server_id, vm_id=None):
-        self.__initValidTasks()
-        for t in self.tasks:
-            task_id = t["task_id"]
-            return Task(t["task_id"], False, self.db)
+    def choose_vaild_task(self, server_id, task_group_id):
+        while True:
+            tid = self.__initValidTasks(task_group_id)
+            if tid:
+                if self.can_be_run(task_group_id, tid):
+                    return Task(tid, False, self.db)
+                else:
+                    print "taskid:{0} cannot run".format(tid)
+            else:
+                break
         return None
 
     def choose_vaild_task2(self, server_id, vm_id=None):
@@ -400,6 +456,17 @@ class TaskGroup(object):
             return Task(t["task_id"], False, self.db)
         return None
 
+def test_choose_task():
+    dbutil.db_host = "192.168.1.21"
+    dbutil.db_name = "vm3"
+    dbutil.db_user = "vm"
+    dbutil.db_port = 3306
+    dbutil.db_pwd = "123456"
+    tg = TaskGroup(dbutil)
+    for i in xrange(2):
+        t = tg.choose_vaild_task(11,307)
+        print t
+        print t.id
 
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
@@ -407,9 +474,10 @@ if __name__ == '__main__':
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    t = TaskGroup(111, dbutil)
-    # TaskGroup.reset_rantimes_allot_impl(dbutil)
-    t.add_default_ran_times(dbutil)
-    t.add_impl_ran_times(111)
-    t.add_ran_times(111)
+    test_choose_task()
+    # t = TaskGroup(111, dbutil)
+    # # TaskGroup.reset_rantimes_allot_impl(dbutil)
+    # t.add_default_ran_times(dbutil)
+    # t.add_impl_ran_times(111)
+    # t.add_ran_times(111)
     # t.choose_vaild_task()

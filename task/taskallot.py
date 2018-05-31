@@ -44,6 +44,7 @@ class TaskAllot(object):
         self.user = user
         self.user_ec = user_ec
         self.logger = logger
+        self.task_group = TaskGroup(db)
         # self.lock = utils.Lock("/tmp/lock-sched.lock")
 
     def log_task_id(self, id, task_id):
@@ -349,8 +350,10 @@ class TaskAllot(object):
         return res[0][0]
 
     def handle_taskgroup(self, task_group_id, vm_id):
-        tg = TaskGroup(task_group_id, self.db)
-        task = tg.choose_vaild_task(self.server_id, vm_id)
+        # tg = TaskGroup(task_group_id, self.db)
+
+        task = self.task_group.choose_vaild_task(self.server_id,
+                task_group_id)
         if not task:
             return None
         self.logger.warn("==========get the valid task:%d==========", task.id)
@@ -380,15 +383,15 @@ class TaskAllot(object):
     def add_ran_times(self, task_id, task_group_id, rid):
         ''' 分配成功后有可用profile 时计数
         '''
-        tg = TaskGroup(task_group_id, self.db)
+        # tg = TaskGroup(task_group_id, self.db)
         if task_group_id == 0:
-            tg.add_ran_times(task_id)
+            self.task_group.add_ran_times(task_id)
             self.add_zero_limit_times(rid)
             # TaskGroup.add_default_ran_times(self.db)
         else:
             # 只更新impl的值得,不更新group,(group由脚本更新)
             #     tg.add_ran_times(task_id)
-            tg.add_impl_ran_times(task_id)
+            self.task_group.add_impl_ran_times(task_id)
 
 
 def allot_test(dbutil):
@@ -422,17 +425,17 @@ def getTask(dbutil, logger):
     from user import UserAllot
     pc = ParallelControl(11, dbutil, logger)
     user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(0, 12, pc, user, None, dbutil, logger)
+    t = TaskAllot(0, 11, pc, user, None, dbutil, logger)
 
-    t.allot_by_default(2, 0)
-    t.allot_by_default(2, 7)
+    # t.allot_by_default(2, 0)
+    # t.allot_by_default(2, 7)
     # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
-    # while True:
-    # ret = t.allot_by_priority(5)
-    # print ret
-    # time.sleep(5)
-    # break
+    while True:
+        ret = t.allot_by_priority(5)
+        print ret
+        time.sleep(5)
+        # break
 
 
 def get_default_logger():
