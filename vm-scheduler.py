@@ -1,33 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
+# File              : bsch/vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 15.05.2018 17:46:1526377570
-# Last Modified Date: 15.05.2018 17:46:1526377570
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:45:1526377549
-# Last Modified Date: 15.05.2018 17:45:1526377549
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:45:1526377517
-# Last Modified Date: 15.05.2018 17:45:1526377517
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:43:1526377426
-# Last Modified Date: 15.05.2018 17:43:1526377426
-# Last Modified By  : coldplay <coldplay_gz@sina.cn>
-# -*- coding: utf-8 -*-
-# File              : vm-scheduler.py
-# Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 14.05.2018 14:13:1526278391
-# Last Modified Date: 14.05.2018 14:13:1526278391
+# Last Modified Date: 22.05.2018 17:21:1526980881
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 """
 @Author: coldplay
@@ -57,6 +33,7 @@ import task.parallel
 from task.parallel import ParallelControl
 from task.rolling_user import UserAllot
 from task.user_ec import UserAllot_EC
+from task.user_rolling7 import UserAllot as UserAllot7
 from logbytask.logtask import LogTask
 from manvm import CManVM
 from random import choice
@@ -85,6 +62,7 @@ g_pc                 = None
 exit_flag            = False
 g_user               = None
 g_userec               = None
+g_user7               = None
 g_manvm              = None
 
 
@@ -392,14 +370,16 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec
+    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec,
+    g_user7
     # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
     g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
     g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
+    g_user7= UserAllot7(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
-            g_userec, dbutil, logger)
+            g_userec, g_user7, dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)

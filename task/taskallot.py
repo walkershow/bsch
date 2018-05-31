@@ -3,14 +3,14 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 31.05.2018 10:21:1527733296
+# Last Modified Date: 31.05.2018 10:43:1527734585
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
-'''
-@Author: coldplay
-@Date: 2017-05-13 16:32:04
-@Last Modified by:   coldplay
-@Last Modified time: 2017-05-13 16:32:04
+'''
+@Author: coldplay
+@Date: 2017-05-13 16:32:04
+@Last Modified by:   coldplay
+@Last Modified time: 2017-05-13 16:32:04
 '''
 
 import sys
@@ -73,11 +73,11 @@ class TaskAllot(object):
             # print "end new day to reinit..."
             #self.logger.info("end new day to reinit...")
     def wait_interval(self, gid):
-        sql = '''select 1 from vm_cur_task where 
-        inter_time>0 and task_group_id=%d and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        sql = '''select 1 from vm_cur_task where 
+        inter_time>0 and task_group_id=%d and ( 
+        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
         ) and start_time>current_date''' % (gid, 5, 5, 5)
         self.logger.info(sql)
         res = dbutil.select_sql(sql)
@@ -86,14 +86,14 @@ class TaskAllot(object):
         return False
 
     def get_band_interval_groupids(self):
-        '''get inter task which running or ran in 5mins
+        '''get inter task which running or ran in 5mins
         '''
         group_ids = []
-        sql = '''select task_group_id from vm_cur_task where 
-        inter_time>0 and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        sql = '''select task_group_id from vm_cur_task where 
+        inter_time>0 and ( 
+        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
+        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
         ) and start_time>current_date''' % (5, 5, 5)
         self.logger.debug(sql)
         res = dbutil.select_sql(sql)
@@ -104,11 +104,11 @@ class TaskAllot(object):
         return group_ids
 
     def get_band_run_groupids(self):
-        '''获取运行状态的任务组
+        '''获取运行状态的任务组
         '''
         group_ids = []
-        sql = '''select task_group_id from vm_cur_task where server_id=%d and
-           status in(-1,1) and task_group_id !=0 and start_time>current_date
+        sql = '''select task_group_id from vm_cur_task where server_id=%d and
+           status in(-1,1) and task_group_id !=0 and start_time>current_date
            ''' % (self.server_id)
         self.logger.debug(sql)
         res = dbutil.select_sql(sql)
@@ -148,7 +148,7 @@ class TaskAllot(object):
         return '1970-1-1 00:00:00'
 
     def task_last_succ_time(self, task_id):
-        sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
+        sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
         cur_task_id=%d and status>=2''' % (self.server_id, task_id)
         res = dbutil.select_sql(sql)
         if res:
@@ -258,8 +258,8 @@ class TaskAllot(object):
             else:
                 self.logger.warn("task_group_id:%d succ_time>=redial_time",
                                  task_group_id)
-            if self.task_interval(task_id, stime):
-                return False
+            # if self.task_interval(task_id, stime):
+                # return False
         return False
 
     def get_candidate_gid(self, vm_id, type=1):
@@ -268,28 +268,28 @@ class TaskAllot(object):
             type_str = ">"
         else:
             type_str = "="
-        sql = '''SELECT
-                        distinct a.id
-                    FROM
-                        vm_task_group b,
-                        vm_task_allot_impl a,
-                        vm_allot_task_by_servergroup c,
-                        vm_task d,
-                        vm_server_group f
-                    WHERE
-                        b.id = a.id
-                    AND b.task_id = a.task_id
-                    AND d.id = b.task_id
-                    AND d. STATUS = 1
-                    AND f.id = c.server_group_id
-                    and f.status =1
-                    AND c.task_group_id = b.id
-                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
-                    AND time_to_sec(a.end_time)
-                    AND a.ran_times < a.allot_times
-                    AND b.id > 0
-                    AND c.task_group_id = a.id
-                    and b.priority %s 0
+        sql = '''SELECT
+                        distinct a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.priority %s 0
                     AND f.server_id = %d ''' % (type_str, self.server_id)
         if type == 0:
             sql = sql + " order by b.priority"
@@ -306,21 +306,21 @@ class TaskAllot(object):
         print self.selected_ids
 
     def get_candidate_gid2(self, vm_id):
-        sql = '''SELECT
-                        distinct b.id
-                    FROM
-                        vm_task_group b,
-                        vm_allot_task_by_servergroup c,
-                        vm_task d,
-                        vm_server_group f
-                    WHERE
-                        d.id = b.task_id
-                    AND d.STATUS = 1
-                    AND f.id = c.server_group_id
-                    and f.status =1
-                    AND c.task_group_id = b.id
-                    AND b.ran_times < b.times
-                    AND b.id > 0
+        sql = '''SELECT
+                        distinct b.id
+                    FROM
+                        vm_task_group b,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        d.id = b.task_id
+                    AND d.STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND b.ran_times < b.times
+                    AND b.id > 0
                     AND f.server_id = %d order by b.id''' % (self.server_id)
         self.logger.info(sql)
         res = self.db.select_sql(sql)
@@ -453,7 +453,7 @@ class TaskAllot(object):
             raise Exception, "%s excute error;ret:%d" % (sql, ret)
 
     def add_ran_times(self, task_id, task_group_id, rid):
-        ''' 分配成功后有可用profile 时计数
+        ''' 分配成功后有可用profile 时计数
         '''
         # tg = TaskGroup(task_group_id, self.db)
         if task_group_id == 0:
@@ -469,7 +469,7 @@ class TaskAllot(object):
 
 
 def allot_test(dbutil):
-    '''任务分配测试
+    '''任务分配测试
     '''
     task_group_id = None
     print len(sys.argv)
@@ -528,8 +528,8 @@ def get_default_logger():
 
 
 if __name__ == '__main__':
-    dbutil.db_host = "192.168.1.21"
-    #dbutil.db_host = "3.3.3.6"
+    # dbutil.db_host = "192.168.1.21"
+    dbutil.db_host = "3.3.3.6"
     dbutil.db_name = "vm3"
     #dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
