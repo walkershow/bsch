@@ -31,10 +31,10 @@ class ParallelControl(object):
         '''
         pnum = self.get_parallel_num(task_group_id)
         if pnum is None:
-            self.logger.info("pnum is None")
+            # self.logger.info("pnum is None")
             return True
         allocated_num = self.get_allocated_num_on_ipchange(task_group_id)
-        self.logger.info("pnum:%d,allocate_num:%d", pnum, allocated_num)
+        # self.logger.info("pnum:%d,allocate_num:%d", pnum, allocated_num)
         if allocated_num>=pnum:
             return True
         return False
@@ -80,7 +80,7 @@ class ParallelControl(object):
             self.server_id, task_group_id)
         # sql = "update vm_parallel_control_info set allocated_num=allocated_num+1,update_time=CURRENT_TIMESTAMP  where server_id=%d and task_group_id=%d"%(
         #     server_id, task_group_id)
-        self.logger.info(sql)
+        # self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise ParallelControlException,"%s excute error;ret:%d"%(sql, ret)
@@ -89,7 +89,7 @@ class ParallelControl(object):
         self.logger.info("server:%d reset allocated when ip change", self.server_id)
         sql = "update vm_parallel_control_info set allocated_num=0,update_time=CURRENT_TIMESTAMP where server_id=%d "%(
             self.server_id)
-        self.logger.info(sql)
+        # self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret<0:
             raise ParallelControlException,"%s excute error;ret:%d"%(sql, ret)
