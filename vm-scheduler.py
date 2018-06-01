@@ -370,8 +370,7 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec,
-    g_user7
+    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec, g_user7
     # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)

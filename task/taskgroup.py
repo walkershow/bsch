@@ -237,6 +237,14 @@ class TaskGroup(object):
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
 
+    def add_ran_times2(self, task_id, task_group_id):
+        sql = "update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d" % (
+            task_group_id, task_id)
+        print sql
+        ret = self.db.execute_sql(sql)
+        if ret < 0:
+            raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
+
     @staticmethod
     def add_default_ran_times(db):
         sql = "update vm_task_group set ran_times=ran_times+1 where id=0"

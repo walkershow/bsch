@@ -431,7 +431,7 @@ class TaskAllot(object):
         if is_ad:
             #广告专享
             ret = self.user7.allot_user(vm_id, task_group_id, task.id)
-        else if uty == 6:
+        elif uty == 6:
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id)
@@ -455,9 +455,11 @@ class TaskAllot(object):
     def add_ran_times(self, task_id, task_group_id, rid):
         ''' 分配成功后有可用profile 时计数
         '''
+        self.logger.warn("task_id:%d, task_group_id:%d", task_id,
+                task_group_id)
         # tg = TaskGroup(task_group_id, self.db)
         if task_group_id == 0:
-            self.task_group.add_ran_times(task_id)
+            self.task_group.add_ran_times2(task_id, task_group_id)
             self.add_zero_limit_times(rid)
             # TaskGroup.add_default_ran_times(self.db)
         else:

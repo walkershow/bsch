@@ -79,7 +79,7 @@ class UserAllot(object):
     def get_rolling_time(self, task_id):
         sql = '''select rolling_time from vm_task_rolling7 where task_id={0}
                 and done=1'''.format(task_id)
-        logger.info(sql)
+        self.logger.info(sql)
         res = self.db.select_sql(sql)
         print res
         print len(res)
@@ -91,7 +91,7 @@ class UserAllot(object):
             if rolling_times>time:
                 return time+1
             else:
-                logger.warn("task_id:%d day is out", task_id)
+                self.logger.warn("task_id:%d day is out", task_id)
                 return -1
                 # self.reset_rolling_time_done(task_id)
         return 1
@@ -101,15 +101,15 @@ class UserAllot(object):
         rolling_time = {1}'''.format(task_id, time_seq)
         ret = self.db.execute_sql(sql)
         if ret<=0:
-            logger.error("the sql:%s excute faild ret:%d",sql, ret)
+            self.logger.error("the sql:%s excute faild ret:%d",sql, ret)
 
     def reset_rolling_time_done(self, task_id):
-        logger.info("reset rolling time done")
+        self.logger.info("reset rolling time done")
         sql = '''update vm_task_rolling7 set done=0,rolling_used_days="" where task_id={0}
         '''.format(task_id)
         ret = self.db.execute_sql(sql)
         if ret<=0:
-            logger.error("the sql:%s excute faild ret:%d",sql, ret)
+            self.logger.error("the sql:%s excute faild ret:%d",sql, ret)
     
 
     def initial_day(self, user_type):
@@ -127,7 +127,7 @@ class UserAllot(object):
         days_int = []
         sql = '''select rolling_used_days from vm_task_rolling7 where
         task_id={0} and rolling_time ={1}'''.format(task_id, time_seq)
-        logger.info(sql)
+        self.logger.info(sql)
         res = self.db.select_sql(sql)
         if res and len(res)>0:
             days_str = res[0][0]
@@ -187,10 +187,10 @@ class UserAllot(object):
         vm_task_rolling7(task_id,rolling_time,task_group_id,rolling_used_days)
         values({0},{1},{2}, '{3}') on duplicate key update
         rolling_used_days="{3}" '''.format(task_id, time_seq, task_group_id, days_str)
-        logger.info("log_task_usedday:%s",sql)
+        self.logger.info("log_task_usedday:%s",sql)
         ret = self.db.execute_sql(sql)
         if ret<=0:
-            logger.error("the sql:%s excute faild ret:%d",sql, ret)
+            self.logger.error("the sql:%s excute faild ret:%d",sql, ret)
 
 
     def useable_profiles(self, day, task_id, uty, tty):
@@ -238,7 +238,7 @@ class UserAllot(object):
                 return False
 
             if not self.task_profile.set_cur_task_profile(
-                    vm_id, task_id, task_group_id, day):
+                    vm_id, task_id, task_group_id,  day):
                 self.logger.warn(
                     utils.auto_encoding(
                         "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
