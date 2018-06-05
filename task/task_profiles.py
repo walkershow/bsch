@@ -137,7 +137,7 @@ class TaskProfile(object):
         print "rantime",randtime
         return randtime
 
-    def set_cur_task_profile(self, vm_id, task_group_id, task_id, day):
+    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day):
         # is_default = False
         # if task_group_id == 0:
             # is_default = True

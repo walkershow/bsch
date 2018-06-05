@@ -244,6 +244,7 @@ def main_loop():
             else:
                 vm_id = choice(vm_ids)
                 vm_business(vm_id)
+            time.sleep(3)
 
 
         except:
