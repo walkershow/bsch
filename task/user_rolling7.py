@@ -39,6 +39,8 @@ class UserAllot(object):
         self.logger = logger
         self.task_profile = TaskProfile(server_id, db, pc, logger)
         self.cur_date = datetime.date.today()
+        self.used_day_set = []
+        self.log_used_day_set = []
 
     def is_new_day(self):
         today = datetime.date.today()
@@ -139,11 +141,12 @@ class UserAllot(object):
         return days_int,-1
             
 
-    def exclude_days(self, task_id, time_seq, user_type):
-        used_day_set, last_used_day = self.used_days(task_id, time_seq)
-        print "used_day_set:", used_day_set
-        if not used_day_set:
-            return set(), used_day_set
+    def exclude_days(self, task_id, time_seq, user_type, last_used_day):
+        # self.used_day_set, last_used_day = self.used_days(task_id, time_seq)
+        # self.log_used_day_set = self.used_day_set
+        # print "used_day_set:", self.used_day_set
+        if not self.used_day_set:
+            return set()
         min_day = last_used_day - 3
         max_day = last_used_day + 3
         gone_day = self.gone_days(user_type)
@@ -153,29 +156,29 @@ class UserAllot(object):
             max_day = gone_day
         ex_day_set = set(range(min_day, max_day))
         print "exclude days:", ex_day_set
-        return ex_day_set|set(used_day_set), used_day_set
+        return ex_day_set|set(self.used_day_set)
 
-    def get_random_useable_day(self, task_id, time_seq, user_type):
-        ex_day_set , used_day_set = self.exclude_days(task_id, time_seq, user_type) 
+    def get_random_useable_day(self, task_id, time_seq, user_type, last_used_day):
+        ex_day_set = self.exclude_days(task_id, time_seq, user_type, last_used_day ) 
         print "before:", ex_day_set
         if ex_day_set is None or len(ex_day_set)<=0:
             day = self.initial_day(user_type)
-            used_day_set.append(day)
+            self.used_day_set.append(day)
             print "after:", ex_day_set
-            return day, used_day_set 
+            return day
             
         total_day_set = self.total_days(user_type)
-        print total_day_set
-        print ex_day_set
-        print used_day_set
+        # print total_day_set
+        # print ex_day_set
+        # print self.used_day_set
         useable_days = total_day_set - ex_day_set
         if useable_days:
             #day = random.choice(useable_days)
             day = random.sample(useable_days, 1)[0]
-            used_day_set.append(day)
-            return day, used_day_set
+            self.used_day_set.append(day)
+            return day
         self.set_rolling_time_done(task_id, time_seq)
-        return None, used_day_set
+        return None
 
     def day_str_from_set(self, days_set):
         days_str = ",".join(str(s) for s in days_set)
@@ -223,16 +226,23 @@ class UserAllot(object):
                     task_group_id)
             return False
         print "rolling time",time_seq
+
+        self.used_day_set, last_used_day = self.used_days(task_id, time_seq)
+        self.log_used_day_set = self.used_day_set[:]
+        print "used_day_set:", self.used_day_set
+        
         while True:
-            day,used_day_set = self.get_random_useable_day(task_id, time_seq,
-                    uty)
+            day = self.get_random_useable_day(task_id, time_seq,
+                    uty,last_used_day)
             print "get random day:", day
-            print "used_day_set:", used_day_set
             if day:
                 if not self.useable_profiles(day, task_id, uty, tty):
                     self.logger.warn(
                         utils.auto_encoding('''该任务组:%d
                             天没有执行过零跑的用户'''), task_group_id)
+                    self.used_day_set.append(day)
+                    print "append:", self.used_day_set
+                    print "append log_used_day_set:",self.log_used_day_set
                     continue
             else:
                 return False
@@ -243,13 +253,22 @@ class UserAllot(object):
                     utils.auto_encoding(
                         "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
                     task_group_id, day)
+                self.used_day_set.append(day)
+                print "append:", self.used_day_set
+                print "append log_used_day_set:",self.log_used_day_set
                 continue
             else:
                 self.logger.info(
                     utils.auto_encoding(
                         "task_group_id:%d,day:%d 成功分配到执行用户"),
                     task_group_id, day)
-                self.log_task_usedday(task_id, time_seq, task_group_id, used_day_set)
+                self.log_used_day_set.append(day)
+                print "append used_day:", self.used_day_set
+                print "log_used_day_set:",self.log_used_day_set
+
+                # self.log_used_day_set = list(set(self.log_used_day_set))
+                self.log_task_usedday(task_id, time_seq, task_group_id,
+                        self.log_used_day_set)
                 return True
         return False
 
@@ -279,7 +298,7 @@ def test():
     logger = get_default_logger()
     pc = ParallelControl(34, dbutil, logger)
     user_allot = UserAllot(34, pc, dbutil, logger)
-    user_allot.allot_user(1, 50000, 50000)
+    user_allot.allot_user(1, 412, 412)
     #for i in range(0, 8):
     #    user_allot.allot_user(1, 10086, 10086)
 
