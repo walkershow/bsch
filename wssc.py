@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 18.05.2018 15:49:1526629794
+# Last Modified Date: 05.06.2018 14:17:1528179448
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -96,7 +96,7 @@ def init():
         "-i",
         "--ip",
         dest="db_ip",
-        default="192.168.1.21",
+        default="3.3.3.6",
         help="mysql database server IP addrss, default is 192.168.1.235")
     parser.add_option(
         "-n",
@@ -126,7 +126,7 @@ def init():
         "-v",
         "--vid",
         dest="vmid",
-        default="0",
+        default="1",
         help="log config file, default is 0")
     parser.add_option(
         "-s",
@@ -253,8 +253,8 @@ def kill_zombie_proc(interval=140):
     return vm_ids
 
 
-def runcmd(task_id, id, task_type, task_group_id, terminal_type):
-    script_name = get_script_name(task_id, task_group_id, task_type,
+def runcmd(task_id, id, user_type, task_group_id, terminal_type):
+    script_name = get_script_name(task_id, task_group_id, user_type,
             terminal_type)
     script = os.path.join(script_path, script_name)
     print "script:", script
@@ -263,13 +263,13 @@ def runcmd(task_id, id, task_type, task_group_id, terminal_type):
         return False
     os.chdir(script_path)
     commands = [python_exec, script, "-t", str(id)]
-    process = subprocess.Popen(
-        commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    process = subprocess.Popen( commands)
     return True
 
 
 def new_task_come():
-    sql = '''select id,cur_task_id,oprcode,cur_profile_id,user_type,timeout,standby_time,task_group_id,
+    sql = '''select id,cur_task_id as task_id,oprcode,cur_profile_id as
+    profile_id,user_type,timeout,standby_time,task_group_id,
     terminal_type from vm_cur_task where status=-1 and server_id=%d and vm_id=%d''' % (int(server_id),
                                                              int(vm_id))
  
@@ -363,13 +363,6 @@ def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
     else:
         script_name = str(task_id) + ".py"
 
-    # if task_group_id == 0:
-        # return "0.py"
-
-    # user_type = get_user_type(task_id)
-    # script_name = str(task_id) + ".py"
-    # if user_type in range(0, 6) and task_group_id != 0:
-        # script_name = task_script_names[user_type]
     return script_name
 
 def clear_timeout_task(): 
@@ -394,11 +387,13 @@ def clear_timeout_task():
                 print cmd_findstr, "is not exist"
                 print "task is not running"
                 set_task_status(7, id)
+                update_task_allot_impl_sub(task_group_id,task_id)
             else:
                 logger.info("kill timeout task:%s", cmd_findstr )
                 print "kill timeout task:", cmd_findstr 
                 proc.kill()
                 set_task_status(6, id)
+                update_task_allot_impl_sub(task_group_id,task_id)
 
 def del_timeout_task():
     sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
@@ -421,6 +416,7 @@ def del_timeout_task():
                 print cmd_findstr, "is not exist"
                 print "task is not running"
                 set_task_status(7, id)
+                update_task_allot_impl_sub(task_group_id,task_id)
 
 
 def get_firefox():
@@ -511,13 +507,6 @@ def update_task_allot_impl_sub(task_group_id, task_id):
         if ret < 0:
             logger.error("update_task_allot_impl_sub")
 
-def ntp_update():
-    if is_windows():
-        ntppath = os.path.join(wssc_path,"ntupdate.bat")
-        commands = [python_exec, ntppath]
-        process = subprocess.Popen(
-            commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
-
 def run_as_single():
     if is_windows():
         myapp = singleton.singleinstance("wssc.py")
@@ -533,12 +522,10 @@ def main():
                     clean_all_firefox()
                     if is_windows():
                         clear_by_hours(tempdir)
-                        closeprocess("WerFault")
                     r = new_task_come()
                     if r is not None:
-                        ntp_update()
-                        print "get task", r['task_id ']
-                        ret = runcmd(r['task_id'], r['id'], r['task_type'],
+                        print "get task", r['task_id']
+                        ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                 r['task_group_id'], r['terminal_type'])
                         if ret:
                             set_task_status(1, r['id'])
