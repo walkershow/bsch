@@ -2,26 +2,26 @@
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 16.05.2018 11:39:1526441990
-# Last Modified Date: 16.05.2018 11:39:1526441990
+# Date              : 13.06.2018 11:13:1528859629
+# Last Modified Date: 13.06.2018 11:14:1528859669
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 16.05.2018 11:39:1526441971
-# Last Modified Date: 16.05.2018 11:39:1526441971
+# Date              : 13.06.2018 11:02:1528858937
+# Last Modified Date: 13.06.2018 11:02:1528858937
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:46:1526377570
-# Last Modified Date: 15.05.2018 17:46:1526377570
+# Date              : 12.06.2018 15:39:1528789155
+# Last Modified Date: 12.06.2018 15:39:1528789155
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 # File              : vm-scheduler.py
 # Author            : coldplay <coldplay_gz@sina.cn>
-# Date              : 15.05.2018 17:45:1526377549
-# Last Modified Date: 15.05.2018 17:45:1526377549
+# Date              : 11.06.2018 17:54:1528710887
+# Last Modified Date: 11.06.2018 17:54:1528710887
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 """
 @Author: coldplay
@@ -49,8 +49,9 @@ import vm_utils
 import utils
 import task.parallel
 from task.parallel import ParallelControl
-from task.rolling_user import UserAllot as UserAllot_Rolling
+from task.rolling_user import UserAllot 
 from task.user_ec import UserAllot_EC
+from task.user_rolling7 import UserAllot as UserAllot7
 from logbytask.logtask import LogTask
 from manvm import CManVM
 from random import choice
@@ -79,6 +80,7 @@ g_pc                 = None
 exit_flag            = False
 g_user               = None
 g_userec               = None
+g_user7               = None
 g_manvm              = None
 
 
@@ -260,6 +262,7 @@ def main_loop():
             else:
                 vm_id = choice(vm_ids)
                 vm_business(vm_id)
+            time.sleep(3)
 
 
         except:
@@ -286,13 +289,13 @@ def init():
         "-i",
         "--ip",
         dest="db_ip",
-        default="192.168.1.21",
+        default="3.3.3.6",
         help="mysql database server IP addrss, default is 192.168.1.21")
     parser.add_option(
         "-n",
         "--name",
         dest="db_name",
-        default="vm3",
+        default="vm-test",
         help="database name, default is vm")
     parser.add_option(
         "-u",
@@ -386,14 +389,15 @@ def init():
     if str(cur_hour) in tlist:
         g_last_shutdown_time = cur_hour
         print "last_shutdown_time", g_last_shutdown_time
-    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec
+    global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec,g_user7
     # task.taskallot.logger = logger
     task.parallel.logger = logger
     g_pc = ParallelControl(g_serverid, dbutil, logger)
-    g_user = UserAllot_Rolling(g_serverid, g_pc, dbutil, logger)
+    g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
+    g_user7 = UserAllot7(g_serverid, g_pc, dbutil, logger)
     g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
-            g_userec, dbutil, logger)
+            g_userec, g_user7, dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)

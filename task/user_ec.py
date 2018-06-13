@@ -38,7 +38,7 @@ class UserAllot_EC(UserAllot):
     def allot_user(self, vm_id, task_group_id, task_id):
         day = -1
         if not self.task_profile.set_cur_task_profile(
-                vm_id, task_id, task_group_id, day ):
+                vm_id, task_id, task_group_id, day):
             self.logger.warn(
                 utils.auto_encoding(
                     "task_group_id:%d 无可分配使用的用户"),
@@ -71,7 +71,7 @@ def get_default_logger():
 
 def test():
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"

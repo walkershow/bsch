@@ -74,10 +74,10 @@ class UserAllot(object):
     def reset_rolling_pos(self, task_group_id):
         return self.log_rolling_pos(task_group_id ,1)
 
-    def allot_user(self, vm_id, task_group_id, task_id):
+    def allot_user(self, vm_id, task_group_id, task_id, area):
         if task_group_id == 0 :
             return self.task_profile.set_cur_task_profile(
-                vm_id, task_id, task_group_id, None)
+                vm_id, task_id, task_group_id, None, area)
         g_days = self.gone_days()
         used_day = self.get_cur_used_day(task_group_id)
         if used_day>= g_days:
@@ -87,7 +87,7 @@ class UserAllot(object):
             day = used_day+1
         for i in xrange(day, g_days+1):
             if not self.task_profile.set_cur_task_profile(
-                    vm_id, task_id, task_group_id, i):
+                    vm_id, task_id, task_group_id, i, area):
                 self.logger.warn(
                     utils.auto_encoding("task_group_id:%d 距离现在第%d天无可分配使用的用户"),
                     task_group_id, i)
@@ -121,7 +121,7 @@ def get_default_logger():
 
 def test():
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"
@@ -129,7 +129,7 @@ def test():
     logger = get_default_logger()
     pc = ParallelControl(15, dbutil, logger)
     user_allot = UserAllot(15, pc, dbutil, logger)
-    user_allot.allot_user(1, 50000, 50000)
+    user_allot.allot_user(1, 50000, 50000 ,2)
     #for i in range(0, 8):
     #    user_allot.allot_user(1, 10086, 10086)
 
