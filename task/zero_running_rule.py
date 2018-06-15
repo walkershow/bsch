@@ -10,8 +10,8 @@ import sys
 import random
 import logging
 import logging.config
-import dbutil
 sys.path.append("..")
+import dbutil
 
 logger = None
 
@@ -35,13 +35,13 @@ class ZeroTask(object):
             return None
         return res[0][0]
 
-    def get_uninited_profiles(self, vm_id, tty, uty):
-        sql = " select a.profile_id from vm_profiles a,profiles b "\
+    def get_uninited_profiles(self, vm_id, tty, uty, area):
+        sql = " select a.profile_id,a.area from vm_profiles a,profiles b "\
             "where a.profile_id not in(select profile_id from vm_users "\
-            "where server_id=%d and vm_id=%d and user_type=%d and terminal_type=%d) and server_id=%d and vm_id=%d "\
-            "and b.terminal_type = %d and a.profile_id=b.id " % (
-                self.server_id, vm_id, uty, tty, self.server_id, vm_id, tty
-            )
+            "where server_id={0} and vm_id={1} and user_type={2} and " \
+            "terminal_type={3}) and server_id={0} and vm_id={1} "\
+            "and b.terminal_type = {3} and a.profile_id=b.id and a.area={4}"\
+            .format( self.server_id, vm_id, uty, tty, area)
         print sql
         res = self.db.select_sql(sql)
         profile_ids = []
@@ -49,10 +49,10 @@ class ZeroTask(object):
             profile_ids.append(r[0])
         return profile_ids
 
-    def get_inited_profiles(self, vm_id, tty, uty):
+    def get_inited_profiles(self, vm_id, tty, uty, area):
         sql = "select a.profile_id from vm_users a where a.server_id=%d and a.vm_id=%d "\
-            "and user_type=%d and a.terminal_type = %d "
-        sql = sql % (self.server_id, vm_id, uty, tty)
+            "and user_type=%d and a.terminal_type = %d and a.area=%d "
+        sql = sql % (self.server_id, vm_id, uty, tty, area)
         # logger.info(sql)
         res = self.db.select_sql(sql)
         profile_ids = []
@@ -90,7 +90,7 @@ class ZeroTask(object):
         if ret < 0:
             raise Exception, "%s exec failed ret:%d" % (sql, ret)
 
-    def get_usable_profiles(self, vm_id, uty, tty):
+    def get_usable_profiles(self, vm_id, uty, tty, area):
         '''未初始优先使用
         已初始的过滤掉被其他任务冻结的
         '''
@@ -98,15 +98,15 @@ class ZeroTask(object):
         terminal_type = tty
 
         uninited_profiles = self.get_uninited_profiles(vm_id, terminal_type,
-                                                       uty)
+                                                       uty, area)
         # print uninited_profiles
         if uninited_profiles:
             print "...use uninited profile..."
             profile_id = random.choice(uninited_profiles)
-            self.log_vm_user(vm_id, profile_id, terminal_type, user_type)
+            self.log_vm_user(vm_id, profile_id, terminal_type, user_type, area)
             return profile_id
 
-        all_profiles = self.get_inited_profiles(vm_id, terminal_type, uty)
+        all_profiles = self.get_inited_profiles(vm_id, terminal_type, uty,area)
         used_profiles = self.get_used_profiles(vm_id, uty)
         # print all_profiles, used_profiles
         usable_profiles = list(
@@ -117,10 +117,10 @@ class ZeroTask(object):
             profile_id = random.choice(usable_profiles)
         return profile_id
 
-    def log_vm_user(self, vm_id, profile_id, terminal_type, user_type):
-        sql = "insert into vm_users(server_id,vm_id,profile_id,terminal_type,user_type,status) "\
-              " values(%d,%d,%d,%d,%d,0)" % (self.server_id,
-                                             vm_id, profile_id, terminal_type, user_type)
+    def log_vm_user(self, vm_id, profile_id, terminal_type, user_type, area):
+        sql = '''insert into vm_users(server_id,vm_id,profile_id,terminal_type,user_type,status,area) 
+        values({0},{1},{2},{3},{4},0,{5})''' .format(self.server_id, vm_id, profile_id, 
+                                     terminal_type, user_type, area)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise ZeroTaskError, "%s excute error;ret:%d" % (sql, ret)
@@ -151,5 +151,5 @@ if __name__ == '__main__':
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
     zt = ZeroTask(1, dbutil)
-    profile_id = zt.get_usable_profiles(1, 1)
+    profile_id = zt.get_usable_profiles(1, 0,1,1)
     print profile_id

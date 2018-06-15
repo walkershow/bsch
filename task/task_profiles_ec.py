@@ -27,12 +27,14 @@ from logbytask.logtask import LogTask, LogTaskError
 class TaskProfile_EC(TaskProfile):
 
     def get_inited_profiles(self, vm_id, tty, uty):
+        print tty, uty
         sql = " select a.profile_id from vm_profiles a,profiles b "\
             "where a.profile_id not in(select profile_id from vm_users "\
-            "where server_id=%d and vm_id=%d and user_type=%d and terminal_type=%d) and server_id=%d and vm_id=%d "\
-            "and b.terminal_type = %d and a.profile_id=b.id " % (
-                self.server_id, vm_id, uty, tty, self.server_id, vm_id, tty
-            )
+            "where server_id={0} and vm_id={1} and user_type={2} and "\
+            "terminal_type={3}) and server_id={0} and vm_id={1} "\
+            "and b.terminal_type = {3} and a.profile_id=b.id " .format(
+                self.server_id, vm_id, uty, tty)
+        # self.logger.info(sql)
         print sql
         res = self.db.select_sql(sql)
         profile_ids = []
@@ -41,10 +43,12 @@ class TaskProfile_EC(TaskProfile):
         return profile_ids
         
 
-    def get_task_usable_profiles(self, vm_id, user_type, terminal_type, day):
+    def get_task_usable_profiles(self, vm_id, user_type, terminal_type, day,
+            task_group_id):
         all_profiles = self.get_inited_profiles(vm_id, terminal_type,
                                                 user_type )
-        used_profiles = self.get_used_profiles(vm_id, user_type, terminal_type)
+        used_profiles = self.get_used_profiles(vm_id, user_type, terminal_type,
+                task_group_id)
         # print all_profiles, used_profiles
         usable_profiles = list(
             set(all_profiles).difference(set(used_profiles)))
@@ -55,23 +59,25 @@ class TaskProfile_EC(TaskProfile):
         return profile_id
 
     def set_cur_task_profile(self, vm_id, task_id, task_group_id, day):
-        (task_type, user_type, terminal_type,standby_time, timeout, copy_cookie,
-        click_mode, inter_time) = self.get_task_type(task_id)
-        print standby_time,inter_time
-        randtime = 0
-        self.logger.info(
-            "task id:%d task_type:%d,user_type:%d, terminal_type:%d", task_id,
-            task_type, user_type, terminal_type)
+        # (task_type, user_type, terminal_type,standby_time, timeout, copy_cookie,
+        # click_mode, inter_time) = self.get_task_type(task_id)
+        r = self.get_task_type(task_id)
+        print r['standby_time'],r['inter_time']
+        randtime = 1
+        # self.logger.info(
+            # "task id:%d task_type:%d,user_type:%d, terminal_type:%d", task_id,
+            # task_type, user_type, terminal_type)
         # print "set_cur_task_profile:",task_type, terminal_typ
-        profile_id = self.get_task_usable_profiles(vm_id, user_type,
-                                                       terminal_type, day)
+        profile_id = self.get_task_usable_profiles(vm_id, r['user_type'],
+                                                       r['terminal_type'], day,
+                                                       task_group_id)
         # print profile_id
         if not profile_id:
-            self.logger.warn("vm_id:%d task id:%d no profile to use!!!", vm_id,
-                             task_id)
+            # self.logger.warn("vm_id:%d task id:%d no profile to use!!!", vm_id,
+                             # task_id)
             return False
-        self.logger.info("vm_id:%d task id:%d will run allot profile id:%d",
-                         vm_id, task_id, profile_id)
+        # self.logger.info("vm_id:%d task id:%d will run allot profile id:%d",
+                         # vm_id, task_id, profile_id)
         self.log_task.gen_oprcode_bytask(self.server_id, vm_id, task_id)
         oprcode = self.log_task.get_oprcode_bytask(self.server_id, vm_id,
                                                    task_id)
@@ -82,19 +88,21 @@ class TaskProfile_EC(TaskProfile):
         terminal_type,standby_time, timeout, copy_cookie,click_mode,inter_time)
          value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d,%d)''' %(
             self.server_id, vm_id, task_id, profile_id, task_group_id,
-            -1, oprcode,user_type, terminal_type, randtime, timeout,
-            copy_cookie, click_mode, inter_time)
-        self.logger.info(sql)
+            -1, oprcode,r['user_type'], r['terminal_type'],
+            randtime,r['timeout'],
+            r['copy_cookie'], r['click_mode'], r['inter_time'])
+        # self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise Exception, "%s exec failed ret:%d" % (sql, ret)
-        self.logger.info(
-            "allot profile succ info:server_id:%d,vm_id:%d,task_id:%d,task_type:%d,profile_id:%d",
-            self.server_id, vm_id, task_id, task_type, profile_id)
+        # self.logger.info(
+            # "allot profile succ info:server_id:%d,vm_id:%d,task_id:%d,task_type:%d,profile_id:%d",
+            # self.server_id, vm_id, task_id, task_type, profile_id)
         # print self.server_id,vm_id, task_id, task_type, profile_id
         if task_id != 0:
-            self.log_task_profile_latest(vm_id, task_id, task_type, profile_id,
-                                         oprcode, -1, user_type, terminal_type)
+            self.log_task_profile_latest(vm_id, task_id, r['type'], profile_id,
+                                         oprcode, -1, r['user_type'],
+                                         r['terminal_type'])
         self.log_task.log(
             self.server_id,
             vm_id,
@@ -112,7 +120,7 @@ class TaskProfile_EC(TaskProfile):
         " start_time=CURRENT_TIMESTAMP, re_enable_hours=%d, oprcode=%d, status=%d"%(
            self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours, oprcode, status, user_type, terminal_type,
               task_type, re_enable_hours, oprcode, status)
-        self.logger.debug("latest:%s", sql)
+        # self.logger.debug("latest:%s", sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise Exception, "%s exec failed ret:%d" % (sql, ret)

@@ -117,7 +117,7 @@ class TaskAllot(object):
             #并行数爆了,才加入band group
             if self.pc.is_ran_out_parallel_num(id):
                 group_ids.append(id)
-        print 'group_ids:', group_ids
+        print 'band group_ids:', group_ids
         # 任务多时会导致本可运行运行
         # inter_group_ids = self.get_band_interval_groupids()
         # print 'inter_group_ids:',inter_group_ids
@@ -129,15 +129,16 @@ class TaskAllot(object):
         return set(group_ids) | pout_ids_set
 
     def vpn_update_time(self):
-        sql = "select update_time,ip from vpn_status where serverid=%d and vpnstatus=1 " % (
+        sql = "select update_time,ip,area from vpn_status where serverid=%d and vpnstatus=1 " % (
             self.server_id)
         res = dbutil.select_sql(sql)
         if res:
             update_time = res[0][0]
             ip = res[0][1]
+            area = int(res[0][2])
             print update_time
-            return update_time, ip
-        return None, None
+            return update_time, ip, area
+        return None, None,None
 
     def vm_last_succ_time(self, task_group_id):
         sql = "select max(succ_time) from vm_cur_task where server_id=%d and task_group_id=%d and status>=2" % (
@@ -226,7 +227,7 @@ class TaskAllot(object):
         succ_time = self.task_last_succ_time(task_id)
         if succ_time is None:
             succ_time = '1970-1-1 00:00:00'
-        redial_time, ip = self.vpn_update_time()
+        redial_time, ip, area = self.vpn_update_time()
         self.logger.info("task_id:%d,last_succ_time:%s, redial_time:%s",
                          task_id, succ_time, redial_time)
         rtime, stime = None, None
@@ -235,17 +236,17 @@ class TaskAllot(object):
             stime = time.strptime(str(succ_time), "%Y-%m-%d %H:%M:%S")
 
             if stime < rtime:
-                return True
+                return True, area
             else:
                 self.logger.warn("task_id:%d succ_time>=redial_time", task_id)
-        return False
+        return False, None
 
     def right_to_allot(self, task_group_id):
         #return True
         succ_time = self.vm_last_succ_time(task_group_id)
         if succ_time is None:
             succ_time = '1970-1-1 00:00:00'
-        redial_time, ip = self.vpn_update_time()
+        redial_time, ip, area = self.vpn_update_time()
         self.logger.info("task_group_id:%d,last_succ_time:%s, redial_time:%s",
                          task_group_id, succ_time, redial_time)
         rtime, stime = None, None
@@ -254,13 +255,13 @@ class TaskAllot(object):
             stime = time.strptime(str(succ_time), "%Y-%m-%d %H:%M:%S")
 
             if stime < rtime:
-                return True
+                return True, area
             else:
                 self.logger.warn("task_group_id:%d succ_time>=redial_time",
                                  task_group_id)
             # if self.task_interval(task_id, stime):
                 # return False
-        return False
+        return False,None
 
     def get_candidate_gid(self, vm_id, type=1):
         type_str = ">"
@@ -296,9 +297,17 @@ class TaskAllot(object):
         self.logger.info(sql)
         res = self.db.select_sql(sql)
         ids = set()
+        rid_set = self.get_band_run_groupids()
+        if type == 0:
+            if res and len(res)>0:
+                print "get pri task:", res[0][0]
+                if res[0][0] not in rid_set:
+                    print "append single task:", res[0][0]
+                    self.selected_ids.append(res[0][0])
+                    print self.selected_ids
+            return 
         for r in res:
             ids.add(r[0])
-        rid_set = self.get_band_run_groupids()
         band_str = ",".join(str(s) for s in rid_set)
         self.logger.info("band task_group_id:%s", band_str)
 
@@ -338,10 +347,11 @@ class TaskAllot(object):
         if not task:
             self.logger.warn("no default task to run uty:%d", uty)
             return None
-        if not self.right_to_allot_zero(task.id):
+        ret, area = self.right_to_allot_zero(task.id)
+        if not ret:
             self.logger.warn("wait for vpn dial...")
             return None
-        ret = self.user.allot_user(vm_id, 0, task.id)
+        ret = self.user.allot_user(vm_id, 0, task.id, area)
         if not ret:
             self.logger.warn(
                 "vm_id:%d,task_id:%d,task_group_id:%d no user to run", vm_id,
@@ -368,6 +378,7 @@ class TaskAllot(object):
                 ret = False
                 self.reset_when_newday()
                 self.get_candidate_gid(vm_id, 1)
+                self.get_candidate_gid(vm_id, 0)
                 # self.get_candidate_gid2(vm_id)
                 print "selected ids:", self.selected_ids
                 while self.selected_ids:
@@ -383,13 +394,14 @@ class TaskAllot(object):
                                 self.logger.info("gid:%d should wait 5 mins",
                                                  gid)
                                 continue
-                            if self.right_to_allot(gid):
+                            ret, area = self.right_to_allot(gid)
+                            if ret:
                                 self.logger.info("get valid gid:%d", gid)
                             else:
                                 # self.logger.warn("wait for redial:%d", gid)
                                 continue
 
-                            task = self.handle_taskgroup(gid, vm_id)
+                            task = self.handle_taskgroup(gid, vm_id, area)
                             if task:
                                 self.logger.info("get the task:%d", task.id)
                                 ret = True
@@ -418,7 +430,7 @@ class TaskAllot(object):
             return None,None
         return res[0][0],res[0][1]
 
-    def handle_taskgroup(self, task_group_id, vm_id):
+    def handle_taskgroup(self, task_group_id, vm_id, area):
         # tg = TaskGroup(task_group_id, self.db)
 
         task = self.task_group.choose_vaild_task(self.server_id,
@@ -430,11 +442,11 @@ class TaskAllot(object):
         self.logger.info("task uty:%d, is_ad:%d", uty, is_ad)
         if is_ad:
             #广告专享
-            ret = self.user7.allot_user(vm_id, task_group_id, task.id)
+            ret = self.user7.allot_user(vm_id, task_group_id, task.id, area)
         elif uty == 6:
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
         else:
-            ret = self.user.allot_user(vm_id, task_group_id, task.id)
+            ret = self.user.allot_user(vm_id, task_group_id, task.id, area)
         print "the allot user ret", ret
         if not ret:
             self.logger.warn(
@@ -498,10 +510,10 @@ def allot_test(dbutil):
 
 
 def getTask(dbutil, logger):
-    from user import UserAllot
+    from rolling_user import UserAllot
     pc = ParallelControl(11, dbutil, logger)
     user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(0, 11, pc, user, None, dbutil, logger)
+    t = TaskAllot(0, 11, pc, user, None,None, dbutil, logger)
 
     # t.allot_by_default(2, 0)
     # t.allot_by_default(2, 7)
@@ -530,10 +542,10 @@ def get_default_logger():
 
 
 if __name__ == '__main__':
-    # dbutil.db_host = "192.168.1.21"
-    dbutil.db_host = "3.3.3.6"
-    dbutil.db_name = "vm3"
-    #dbutil.db_name = "vm-test"
+    dbutil.db_host = "192.168.1.21"
+    # dbutil.db_host = "3.3.3.6"
+    # dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"

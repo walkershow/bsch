@@ -39,11 +39,14 @@ class UserAllot(object):
         self.logger = logger
         self.task_profile = TaskProfile(server_id, db, pc, logger)
         self.cur_date = datetime.date.today()
+        # self.cur_date = None
         self.used_day_set = []
         self.log_used_day_set = []
 
     def is_new_day(self):
+        # print "is new day=========================="
         today = datetime.date.today()
+        # print today, self.cur_date
         if today == self.cur_date:
             return False
         self.cur_date = today
@@ -105,9 +108,31 @@ class UserAllot(object):
         if ret<=0:
             self.logger.error("the sql:%s excute faild ret:%d",sql, ret)
 
+    def get_used_out_server_ids(self, task_id, time_seq):
+        sql = '''select used_out_server_ids from vm_task_rolling7 where task_id={0} and
+        rolling_time = {1}'''.format(task_id, time_seq)
+        self.logger.info(sql)
+        res = self.db.select_sql(sql)
+        if res and len(res)>0:
+            server_str = res[0][0]
+            if not server_str:
+                return []
+            server_ids = server_str.split(',')
+            server_ids_int = map(int, server_ids)
+            return server_ids_int
+        return []
+
+            
+    def set_used_out_server_id(self, task_id, time_seq, server_str):
+        sql = '''update vm_task_rolling7 set used_out_server_ids='{2}' where task_id={0} and
+        rolling_time = {1}'''.format(task_id, time_seq, server_str)
+        ret = self.db.execute_sql(sql)
+        if ret<=0:
+            self.logger.error("the sql:%s excute faild ret:%d",sql, ret)
+
     def reset_rolling_time_done(self, task_id):
         self.logger.info("reset rolling time done")
-        sql = '''update vm_task_rolling7 set done=0,rolling_used_days="" where task_id={0}
+        sql = '''update vm_task_rolling7 set done=0,used_out_server_ids='',rolling_used_days="" where task_id={0}
         '''.format(task_id)
         ret = self.db.execute_sql(sql)
         if ret<=0:
@@ -155,34 +180,45 @@ class UserAllot(object):
         if max_day > gone_day:
             max_day = gone_day
         ex_day_set = set(range(min_day, max_day))
-        print "exclude days:", ex_day_set
+        #print "exclude days:", ex_day_set
         return ex_day_set|set(self.used_day_set)
 
-    def get_random_useable_day(self, task_id, time_seq, user_type, last_used_day):
+    def get_random_useable_day(self, task_id, time_seq, user_type,
+            last_used_day, server_ids):
         ex_day_set = self.exclude_days(task_id, time_seq, user_type, last_used_day ) 
-        print "before:", ex_day_set
+        #print "before:", ex_day_set
         if ex_day_set is None or len(ex_day_set)<=0:
             day = self.initial_day(user_type)
             self.used_day_set.append(day)
-            print "after:", ex_day_set
+            #print "after:", ex_day_set
             return day
             
         total_day_set = self.total_days(user_type)
-        # print total_day_set
-        # print ex_day_set
-        # print self.used_day_set
+        #print "total_day_set:",total_day_set
+        #print "ex_day_set:",ex_day_set
+        #print self.used_day_set
         useable_days = total_day_set - ex_day_set
         if useable_days:
             #day = random.choice(useable_days)
             day = random.sample(useable_days, 1)[0]
             self.used_day_set.append(day)
             return day
-        self.set_rolling_time_done(task_id, time_seq)
+        else:
+            left = total_day_set - set(self.log_used_day_set)
+            if not left:
+                self.set_rolling_time_done(task_id, time_seq)
+            server_ids.append(self.server_id)
+            server_str = self.server_str_from_set(server_ids)
+            self.set_used_out_server_id(task_id, time_seq, server_str)
         return None
 
     def day_str_from_set(self, days_set):
         days_str = ",".join(str(s) for s in days_set)
         return days_str
+
+    def server_str_from_set(self, days_set):
+        s_str = ",".join(str(s) for s in days_set)
+        return s_str
 
     def log_task_usedday(self, task_id, time_seq,task_group_id, day_set):
         days_str = self.day_str_from_set(day_set)
@@ -208,11 +244,12 @@ class UserAllot(object):
         return False
 
 
-    def allot_user(self, vm_id, task_group_id, task_id):
+    def allot_user(self, vm_id, task_group_id, task_id, area):
         if task_group_id == 0 or task_group_id==9999:
             return self.task_profile.set_cur_task_profile(
-                vm_id, task_id, task_group_id, None)
+                vm_id, task_id, task_group_id, None, area)
         if self.is_new_day():
+            print "new day"
             self.reset_rolling_time_done(task_id)
 
         r = self.get_task_type(task_id)
@@ -227,13 +264,19 @@ class UserAllot(object):
             return False
         print "rolling time",time_seq
 
+        server_ids = self.get_used_out_server_ids(task_id, time_seq)
+        print server_ids
+        if server_ids :
+            if self.server_id in server_ids:
+                logger.info("此服务器:%d已登记使用完", self.server_id)
+                return False
         self.used_day_set, last_used_day = self.used_days(task_id, time_seq)
         self.log_used_day_set = self.used_day_set[:]
         print "used_day_set:", self.used_day_set
         
         while True:
             day = self.get_random_useable_day(task_id, time_seq,
-                    uty,last_used_day)
+                    uty,last_used_day, server_ids)
             print "get random day:", day
             if day:
                 if not self.useable_profiles(day, task_id, uty, tty):
@@ -248,7 +291,7 @@ class UserAllot(object):
                 return False
 
             if not self.task_profile.set_cur_task_profile(
-                    vm_id, task_id, task_group_id,  day):
+                    vm_id, task_id, task_group_id,  day, area):
                 self.logger.warn(
                     utils.auto_encoding(
                         "task_group_id:%d 距离现在第%d天无可分配使用的用户"),
@@ -296,9 +339,9 @@ def test():
     dbutil.db_pwd = "chinaU#2720"
     global logger
     logger = get_default_logger()
-    pc = ParallelControl(34, dbutil, logger)
-    user_allot = UserAllot(34, pc, dbutil, logger)
-    user_allot.allot_user(1, 412, 412)
+    pc = ParallelControl(41, dbutil, logger)
+    user_allot = UserAllot(41, pc, dbutil, logger)
+    user_allot.allot_user(1, 50060, 50060, 1)
     #for i in range(0, 8):
     #    user_allot.allot_user(1, 10086, 10086)
 

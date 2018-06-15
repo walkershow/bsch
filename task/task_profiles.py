@@ -101,21 +101,24 @@ class TaskProfile(object):
             profiles.append(id)
         return profiles
 
-    def get_inited_profiles(self, vm_id, tty, uty, day):
-        sql = "select a.profile_id from vm_users a where a.server_id=%d and a.vm_id=%d "\
-        "and user_type=%d and a.terminal_type = %d and TIMESTAMPDIFF(DAY,a.create_time,now())=%d "
-        sql = sql % (self.server_id, vm_id, uty, tty, day)
+    def get_inited_profiles(self, vm_id, tty, uty, day, area):
+        sql = '''select a.profile_id from vm_users a where a.server_id=%d and a.vm_id=%d 
+        and user_type=%d and a.terminal_type = %d and area=%d and
+        TIMESTAMPDIFF(DAY,a.create_time,now())=%d''' 
+        sql = sql % (self.server_id, vm_id, uty, tty, area, day)
         self.logger.info(sql)
         res = self.db.select_sql(sql)
         profile_ids = []
+        # if not res:
+            # return []
         for r in res:
             profile_ids.append(r[0])
         return profile_ids
 
     def get_task_usable_profiles(self, vm_id, user_type, terminal_type, day,
-            task_group_id):
+            task_group_id, area):
         all_profiles = self.get_inited_profiles(vm_id, terminal_type,
-                                                user_type, day)
+                                                user_type, day, area)
         used_profiles = self.get_used_profiles(vm_id, user_type, terminal_type,
                 task_group_id)
         # print all_profiles, used_profiles
@@ -137,7 +140,7 @@ class TaskProfile(object):
         print "rantime",randtime
         return randtime
 
-    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day):
+    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day, area):
         # is_default = False
         # if task_group_id == 0:
             # is_default = True
@@ -153,14 +156,14 @@ class TaskProfile(object):
         # print "set_cur_task_profile:",task_type, terminal_typ
         if task_group_id==0:
             profile_id = self.zt.get_usable_profiles(vm_id, r['user_type'],
-                                                     r['terminal_type'])
+                                                     r['terminal_type'], area)
         elif task_group_id==9999:
             profile_id = self.nine.get_usable_profiles(vm_id, r['user_type'],
                                                      r['terminal_type'])
         else:
             profile_id = self.get_task_usable_profiles(vm_id, r['user_type'],
                                                        r['terminal_type'], day,
-                                                       task_group_id)
+                                                       task_group_id, area)
         # print profile_id
         if not profile_id:
             self.logger.warn("vm_id:%d task id:%d no profile to use!!!", vm_id,
@@ -175,11 +178,14 @@ class TaskProfile(object):
 
         sql = '''insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,
         task_group_id,status,start_time,oprcode,ran_minutes,user_type,
-        terminal_type,standby_time, timeout, copy_cookie,click_mode,inter_time)
-         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d,%d)''' %(
+        terminal_type,standby_time, timeout, copy_cookie,click_mode,inter_time,
+        area)
+         value({0},{1},{2},{3},{4},{5},CURRENT_TIMESTAMP,{6},0,{7},{8},
+                 {9},{10},{11},{12},{13},{14})'''.format(
             self.server_id, vm_id, task_id, profile_id, task_group_id,
             -1, oprcode,r['user_type'], r['terminal_type'], randtime,
-            r['timeout'], r['copy_cookie'], r['click_mode'], r['inter_time'])
+            r['timeout'], r['copy_cookie'], r['click_mode'], r['inter_time'],
+            area)
         self.logger.info(sql)
         ret = self.db.execute_sql(sql)
         if ret < 0:
@@ -245,11 +251,12 @@ def get_default_logger():
 if __name__ == '__main__':
     global logger
     dbutil.db_host = "192.168.1.21"
-    dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
     logger = get_default_logger()
     #pc = ParallelControl(g_serverid, dbutil)
     t = TaskProfile(1, dbutil, None, logger)
-    t.set_cur_task_profile(1, 410, 410,1)
+    # t.set_cur_task_profile(1, 410, 410,1)
+    t.set_cur_task_profile(1, 10000, 0,1,1)
