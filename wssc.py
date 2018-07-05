@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 05.06.2018 14:17:1528179448
+# Last Modified Date: 05.07.2018 15:36:1530776198
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -25,6 +25,7 @@ import traceback
 from utils import is_windows,tmp_dir
 import dbutil
 import psutil
+from tv import dial
 
 if is_windows():
     import singleton
@@ -102,7 +103,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm3",
+        default="vm-test",
         help="database name, default is gamedb")
     parser.add_option(
         "-u",
@@ -524,6 +525,11 @@ def main():
                         clear_by_hours(tempdir)
                     r = new_task_come()
                     if r is not None:
+                        print "dial before start task"
+                        if not dial():
+                            print "dial unsuccessful"
+                            time.sleep(5)
+                            continue
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                 r['task_group_id'], r['terminal_type'])
