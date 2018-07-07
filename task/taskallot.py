@@ -3,7 +3,7 @@
 # File              : taskallot.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 07.04.2018 18:14:1523096068
-# Last Modified Date: 13.06.2018 11:01:1528858913
+# Last Modified Date: 07.07.2018 15:58:1530950332
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -13,16 +13,18 @@
 @Last Modified time: 2017-05-13 16:32:04
 '''
 
-import sys
 import datetime
-import time
 import logging
 import logging.config
-from taskgroup import TaskGroup
+import sys
+import time
+
 import dbutil
 import utils
-from task import TaskError
 from parallel import ParallelControl
+from task import TaskError
+from taskgroup import TaskGroup
+
 sys.path.append("..")
 
 
@@ -62,36 +64,30 @@ class TaskAllot(object):
         if today != self.cur_date:
             self.cur_date = today
 
-    def wait_interval(self, gid):
-        sql = '''select 1 from vm_cur_task where 
-        inter_time>0 and task_group_id=%d and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        ) and start_time>current_date''' % (gid, 5, 5, 5)
+    def is_inited_start(self,gid):
+        sql ='''select max(id) from vm_cur_task where task_group_id={0} and
+        inter_time>0 and start_time>current_date'''.format(gid)
         self.logger.info(sql)
         res = dbutil.select_sql(sql)
+        if res and len(res) >= 1:
+           return res[0][0]
+        return None
+
+    def wait_interval(self, gid):
+        max_id = self.is_inited_start(gid)
+        if not max_id: 
+          return True
+        sql = '''select 1 from vm_cur_task where id=%d and ( 
+        round((UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(start_time))/60)>5
+        ) and start_time>current_date''' % (max_id)
+
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+       
         if res and len(res) >= 1:
             return True
         return False
 
-    def get_band_interval_groupids(self):
-        '''get inter task which running or ran in 5mins
-        '''
-        group_ids = []
-        sql = '''select task_group_id from vm_cur_task where 
-        inter_time>0 and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        ) and start_time>current_date''' % (5, 5, 5)
-        self.logger.debug(sql)
-        res = dbutil.select_sql(sql)
-        for r in res:
-            id = r[0]
-            group_ids.append(id)
-
-        return group_ids
 
     def get_band_run_groupids(self):
         '''获取运行状态的任务组
@@ -108,11 +104,6 @@ class TaskAllot(object):
             if self.pc.is_ran_out_parallel_num(id):
                 group_ids.append(id)
         print 'group_ids:', group_ids
-        # 任务多时会导致本可运行运行
-        # inter_group_ids = self.get_band_interval_groupids()
-        # print 'inter_group_ids:',inter_group_ids
-        # group_ids.extend(inter_group_ids)
-        # print "extend groupid", group_ids
 
         pout_ids_set = self.pc.get_ran_out_parallel_task_set()
         print pout_ids_set
