@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 09.07.2018 17:41:1531129274
+# Last Modified Date: 09.07.2018 17:50:1531129840
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -22,7 +22,7 @@ import subprocess
 import sys
 import time
 import traceback
-from utils import is_windows,tmp_dir
+from utils import is_windows, tmp_dir
 import dbutil
 import psutil
 from tv import dial
@@ -38,7 +38,10 @@ cur_hour = None
 vm_id = 0
 server_id = 0
 script_path = None
-task_script_names = ['bdads.py', 'sgads.py', '360ads.py','zgads.py','bingads.py','yahooads.py','bdads.py', '58ads.py']
+task_script_names = [
+    'bdads.py', 'sgads.py', '360ads.py', 'zgads.py', 'bingads.py',
+    'yahooads.py', 'bdads.py', '58ads.py'
+]
 # tempdir = 'x:\\'
 tempdir = tmp_dir()
 wssc_path = None
@@ -46,6 +49,7 @@ if is_windows():
     python_exec = 'python'
 else:
     python_exec = 'python2'
+
 
 def closeprocess(pname):
     try:
@@ -58,6 +62,7 @@ def closeprocess(pname):
         return True
     except Exception, e:
         return False
+
 
 if is_windows():
 
@@ -177,7 +182,7 @@ def get_max_update_time():
     if not res:
         return vms_time
     for r in res:
-        vms_time[r[1]] = {"id": r[0], "ut": r[2], "gid": r[3],"tty":r[4]}
+        vms_time[r[1]] = {"id": r[0], "ut": r[2], "gid": r[3], "tty": r[4]}
     return vms_time
 
 
@@ -256,7 +261,7 @@ def kill_zombie_proc(interval=140):
 
 def runcmd(task_id, id, user_type, task_group_id, terminal_type):
     script_name = get_script_name(task_id, task_group_id, user_type,
-            terminal_type)
+                                  terminal_type)
     script = os.path.join(script_path, script_name)
     print "script:", script
     if not os.path.exists(script):
@@ -264,16 +269,16 @@ def runcmd(task_id, id, user_type, task_group_id, terminal_type):
         return False
     os.chdir(script_path)
     commands = [python_exec, script, "-t", str(id)]
-    process = subprocess.Popen( commands)
+    process = subprocess.Popen(commands)
     return True
 
 
 def new_task_come():
     sql = '''select id,cur_task_id as task_id,oprcode,cur_profile_id as
     profile_id,user_type,timeout,standby_time,task_group_id,
-    terminal_type from vm_cur_task where status=-1 and server_id=%d and vm_id=%d''' % (int(server_id),
-                                                             int(vm_id))
- 
+    terminal_type from vm_cur_task where status=-1 and server_id=%d and vm_id=%d''' % (
+        int(server_id), int(vm_id))
+
     logger.info(sql)
     res = dbutil.select_sqlwithdict(sql)
     if not res:
@@ -340,13 +345,15 @@ def find_proc_by_cmdline(cmdline):
                 return proc
     return None
 
-def record_vpn_ip_areaname(ip, areaname):
-    sql = '''update vpn_status set vpnstatus=1,ip={0},area_name={1} where
-    server_id={2}'''.format(ip, areaname, server_id)
+
+def record_vpn_ip_areaname(status, ip, areaname):
+    sql = '''update vpn_status set vpnstatus={3},ip={0},area_name={1} where
+    server_id={2}'''.format(ip, areaname, server_id, status)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
     if ret < 0:
         logger.error("sql:%s, ret:%d", sql, ret)
+
 
 def notify_vpn_redial():
     sql = 'update vm_isdial_baidu set isdial=1,update_time=current_timestamp where serverid=%d' % (
@@ -357,14 +364,15 @@ def notify_vpn_redial():
         logger.error("sql:%s, ret:%d", sql, ret)
 
 
-def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
+def get_script_name(task_id, task_group_id, user_type=None, terminal_type=1):
     if user_type is None:
         user_type = get_user_type(task_id)
-    if user_type in range(0, 8) and task_group_id != 0 and task_group_id<50000:
+    if user_type in range(0,
+                          8) and task_group_id != 0 and task_group_id < 50000:
         script_name = task_script_names[user_type]
-    elif task_group_id == 0 and terminal_type==1:
+    elif task_group_id == 0 and terminal_type == 1:
         script_name = "0.py"
-    elif task_group_id == 0 and terminal_type==2:
+    elif task_group_id == 0 and terminal_type == 2:
         script_name = "0p.py"
     elif task_group_id >= 50000:
         script_name = get_task_scriptfile(task_id)
@@ -373,10 +381,12 @@ def get_script_name(task_id, task_group_id, user_type = None, terminal_type=1):
 
     return script_name
 
-def clear_timeout_task(): 
+
+def clear_timeout_task():
     sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
     where status in (1,2) and server_id=%d and vm_id=%d
-    and (ran_minutes>timeout+2  or TO_SECONDS(now())-TO_SECONDS(update_time)>500)''' % (server_id, vm_id)
+    and (ran_minutes>timeout+2  or TO_SECONDS(now())-TO_SECONDS(update_time)>500)''' % (
+        server_id, vm_id)
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
@@ -387,7 +397,8 @@ def clear_timeout_task():
             task_group_id = r[2]
             tty = r[3]
             user_type = r[4]
-            script_name = get_script_name(task_id, task_group_id,user_type, tty)
+            script_name = get_script_name(task_id, task_group_id, user_type,
+                                          tty)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
@@ -395,13 +406,14 @@ def clear_timeout_task():
                 print cmd_findstr, "is not exist"
                 print "task is not running"
                 set_task_status(7, id)
-                update_task_allot_impl_sub(task_group_id,task_id)
+                update_task_allot_impl_sub(task_group_id, task_id)
             else:
-                logger.info("kill timeout task:%s", cmd_findstr )
-                print "kill timeout task:", cmd_findstr 
+                logger.info("kill timeout task:%s", cmd_findstr)
+                print "kill timeout task:", cmd_findstr
                 proc.kill()
                 set_task_status(6, id)
-                update_task_allot_impl_sub(task_group_id,task_id)
+                update_task_allot_impl_sub(task_group_id, task_id)
+
 
 def del_timeout_task():
     sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
@@ -416,7 +428,8 @@ def del_timeout_task():
             task_group_id = r[2]
             tty = r[3]
             user_type = r[4]
-            script_name = get_script_name(task_id, task_group_id,user_type, tty)
+            script_name = get_script_name(task_id, task_group_id, user_type,
+                                          tty)
             cmd_findstr = script_name + " -t %d" % (id)
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
@@ -424,7 +437,7 @@ def del_timeout_task():
                 print cmd_findstr, "is not exist"
                 print "task is not running"
                 set_task_status(7, id)
-                update_task_allot_impl_sub(task_group_id,task_id)
+                update_task_allot_impl_sub(task_group_id, task_id)
 
 
 def get_firefox():
@@ -434,29 +447,32 @@ def get_firefox():
         if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
             # print proc.info['cmdline']
-            if proc.info["cmdline"] is not None and proc.info["cmdline"].find( "firefox.exe --marionette") != -1:
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
+                    "firefox.exe --marionette") != -1:
                 print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
 
-def clean_all_firefox():
-        plist = get_firefox()
-        if len(plist) >= 6:
-            print "****************firefox too much********************"
-            closeprocess("firefox")
-            closeprocess("geckodriver")
-            sleep(3)
-            for i in range(1,5):
-                if len(plist) <=0:
-                    break
-                plist = get_firefox()
-                if len(plist) >0:
-                    closeprocess("firefox")
-                    closeprocess("geckodriver")
-                    time.sleep(2)
 
-            print "********************clean all process********************"
-    
+def clean_all_firefox():
+    plist = get_firefox()
+    if len(plist) >= 6:
+        print "****************firefox too much********************"
+        closeprocess("firefox")
+        closeprocess("geckodriver")
+        sleep(3)
+        for i in range(1, 5):
+            if len(plist) <= 0:
+                break
+            plist = get_firefox()
+            if len(plist) > 0:
+                closeprocess("firefox")
+                closeprocess("geckodriver")
+                time.sleep(2)
+
+        print "********************clean all process********************"
+
+
 def update_status_and_time(db):
     sql = "update vm_list set `status` = 1, update_time = CURRENT_TIMESTAMP where server_id = %s and vm_id = %s" % (
         server_id, vm_id)
@@ -478,8 +494,7 @@ def removePath(destinationPath):
                         removePath(pathFull)
                 shutil.rmtree(destinationPath, True)
     except Exception, e:
-        logger.error("delete tempdir error:%s", 
-                    e.message)
+        logger.error("delete tempdir error:%s", e.message)
 
 
 def clear_on_newday(temp_dir):
@@ -493,33 +508,35 @@ def clear_on_newday(temp_dir):
         os.mkdir(temp_dir)
         logger.info("==========clear tempdir on new day end==========")
 
+
 def clear_by_hours(temp_dir):
-    global cur_date,cur_hour
+    global cur_date, cur_hour
     nowtime = datetime.datetime.now()
     nowhour = nowtime.hour
     print "nowhour:", nowhour, "====", "cur_hour:", cur_hour
     if nowhour != cur_hour:
         logger.info("==========clear tempdir on new hour start==========")
         removePath(temp_dir)
-        cur_hour =nowhour 
+        cur_hour = nowhour
         os.mkdir(temp_dir)
         logger.info("==========clear tempdir on new hour end==========")
 
+
 def update_task_allot_impl_sub(task_group_id, task_id):
-        format_data = {
-            "task_id": task_id,
-            "group_id": task_group_id
-        }
-        sql = "update vm_task_allot_impl set ran_times=ran_times - 1 where id = {group_id} and task_id = {task_id} and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)".format(**format_data)
-        ret = dbutil.execute_sql(sql)
-        if ret < 0:
-            logger.error("update_task_allot_impl_sub")
+    format_data = {"task_id": task_id, "group_id": task_group_id}
+    sql = "update vm_task_allot_impl set ran_times=ran_times - 1 where id = {group_id} and task_id = {task_id} and time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time)".format(
+        **format_data)
+    ret = dbutil.execute_sql(sql)
+    if ret < 0:
+        logger.error("update_task_allot_impl_sub")
+
 
 def run_as_single():
     if is_windows():
         myapp = singleton.singleinstance("wssc.py")
         myapp.run()
-    
+
+
 def main():
     run_as_single()
     init()
@@ -533,16 +550,18 @@ def main():
                     r = new_task_come()
                     if r is not None:
                         print "dial before start task"
-                        ip,area_name = dial()
+                        if dialoff():
+                            record_vpn_ip_areaname(2, ip, area_name)
+                        ip, area_name = dial()
                         if not ip:
                             print "dial unsuccessful"
                             time.sleep(5)
                             continue
                         else:
-                            record_vpn_ip_areaname(ip, area_name)
+                            record_vpn_ip_areaname(1, ip, area_name)
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
-                                r['task_group_id'], r['terminal_type'])
+                                     r['task_group_id'], r['terminal_type'])
                         if ret:
                             set_task_status(1, r['id'])
                         else:
@@ -550,7 +569,7 @@ def main():
                                 r['task_id'], r['profile_id'], 3)
                             set_task_status(3, r['id'])
                             update_task_allot_impl_sub(r['task_group_id'],
-                                    r['task_id'])
+                                                       r['task_id'])
                     clear_timeout_task()
                     del_timeout_task()
                     kill_zombie_proc()
@@ -568,10 +587,12 @@ def main():
         traceback.print_exc()
         # logger.error('exception on main_loop', exc_info = True)
 
+
 def test_clear():
     init()
     get_create_time()
     # clear_on_newday("d:\profiles")
+
 
 if __name__ == "__main__":
     while True:
@@ -580,7 +601,7 @@ if __name__ == "__main__":
             # clear_by_hours('d:\\profiles')
             main()
         # except Exception, e:
-            # print 'traceback.print_exc():'
-            # traceback.print_exc()
-            # logger.error('exception on main_loop', exc_info=True)
-            # time.sleep(5)
+        # print 'traceback.print_exc():'
+        # traceback.print_exc()
+        # logger.error('exception on main_loop', exc_info=True)
+        # time.sleep(5)

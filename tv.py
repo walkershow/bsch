@@ -3,7 +3,7 @@
 # File              : tv.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 09.07.2018 15:04:1531119896
-# Last Modified Date: 09.07.2018 15:45:1531122319
+# Last Modified Date: 09.07.2018 17:48:1531129682
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # coding=utf-8
 import os
@@ -22,8 +22,6 @@ def is_pptp_succ():
         return False
 
 def dial():
-    if is_pptp_succ():
-        dialoff()
     cmd = "pon debo"
     ret = os.system(cmd)
     if ret != 0:
@@ -36,9 +34,11 @@ def dial():
     return None
 
 def dialoff():
-    cmd = "pkill pptp"
-    ret = os.system(cmd)
-    return True if ret else False
+    if is_pptp_succ():
+        cmd = "pkill pptp"
+        ret = os.system(cmd)
+        return True if ret else False
+    return True
 
 def get_dialup_ip():
     try:
