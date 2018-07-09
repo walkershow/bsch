@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 05.07.2018 15:36:1530776198
+# Last Modified Date: 09.07.2018 15:53:1531122828
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -340,6 +340,13 @@ def find_proc_by_cmdline(cmdline):
                 return proc
     return None
 
+def record_vpn_ip_areaname(ip, areaname):
+    sql = '''update vpn_status set ip={0},area_name={1} where
+    server_id={2}'''.format(ip, areaname, server_id)
+    logger.info(sql)
+    ret = dbutil.execute_sql(sql)
+    if ret < 0:
+        logger.error("sql:%s, ret:%d", sql, ret)
 
 def notify_vpn_redial():
     sql = 'update vm_isdial_baidu set isdial=1,update_time=current_timestamp where serverid=%d' % (
@@ -526,10 +533,13 @@ def main():
                     r = new_task_come()
                     if r is not None:
                         print "dial before start task"
-                        if not dial():
+                        ip,area_name = dial()
+                        if not ip:
                             print "dial unsuccessful"
                             time.sleep(5)
                             continue
+                        else:
+                            record_vpn_ip_areaname(ip, area_name)
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                 r['task_group_id'], r['terminal_type'])
