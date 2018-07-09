@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 09.07.2018 15:53:1531122828
+# Last Modified Date: 09.07.2018 17:41:1531129274
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -341,7 +341,7 @@ def find_proc_by_cmdline(cmdline):
     return None
 
 def record_vpn_ip_areaname(ip, areaname):
-    sql = '''update vpn_status set ip={0},area_name={1} where
+    sql = '''update vpn_status set vpnstatus=1,ip={0},area_name={1} where
     server_id={2}'''.format(ip, areaname, server_id)
     logger.info(sql)
     ret = dbutil.execute_sql(sql)
