@@ -3,7 +3,7 @@
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 09.07.2018 17:50:1531129840
+# Last Modified Date: 10.07.2018 11:46:1531194362
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -25,7 +25,7 @@ import traceback
 from utils import is_windows, tmp_dir
 import dbutil
 import psutil
-from tv import dial
+from tv import dial,dialoff
 
 if is_windows():
     import singleton
@@ -540,6 +540,7 @@ def run_as_single():
 def main():
     run_as_single()
     init()
+    ip, area_name = "" , ""
     try:
         while True:
             try:
@@ -549,16 +550,17 @@ def main():
                         clear_by_hours(tempdir)
                     r = new_task_come()
                     if r is not None:
-                        print "dial before start task"
-                        if dialoff():
-                            record_vpn_ip_areaname(2, ip, area_name)
-                        ip, area_name = dial()
-                        if not ip:
-                            print "dial unsuccessful"
-                            time.sleep(5)
-                            continue
-                        else:
-                            record_vpn_ip_areaname(1, ip, area_name)
+                        if r['task_group_id'] !=0:
+                            print "dial before start task"
+                            if dialoff():
+                                record_vpn_ip_areaname(2, ip, area_name)
+                            ip, area_name = dial()
+                            if not ip:
+                                print "dial unsuccessful"
+                                time.sleep(5)
+                                continue
+                            else:
+                                record_vpn_ip_areaname(1, ip, area_name)
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                      r['task_group_id'], r['terminal_type'])

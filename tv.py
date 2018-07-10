@@ -3,7 +3,7 @@
 # File              : tv.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 09.07.2018 15:04:1531119896
-# Last Modified Date: 09.07.2018 17:48:1531129682
+# Last Modified Date: 10.07.2018 17:47:1531216032
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # coding=utf-8
 import os
@@ -25,20 +25,21 @@ def dial():
     cmd = "pon debo"
     ret = os.system(cmd)
     if ret != 0:
-        return None
+        return None,None
     for i in range(10):
         if is_pptp_succ():
             ip,area_name = get_dialup_ip()
             return ip,area_name
         time.sleep(5)
-    return None
+    return None,None
 
 def dialoff():
+    ret = False
     if is_pptp_succ():
         cmd = "pkill pptp"
         ret = os.system(cmd)
-        return True if ret else False
-    return True
+        ret = True
+    return True if ret else False
 
 def get_dialup_ip():
     try:
