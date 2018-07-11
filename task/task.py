@@ -1,3 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+# File              : task.py
+# Author            : coldplay <coldplay_gz@sina.cn>
+# Date              : 11.07.2018 10:54:1531277692
+# Last Modified Date: 11.07.2018 10:54:1531277692
+# Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
 @Author: coldplay 
@@ -37,14 +44,13 @@ class Task(object):
         self.__initTask()
 
     def __initTask(self):
-        sql = "select id,task_name,script_file,gen_type from vm_task where id=%d"%(self.id)
+        sql = "select id,task_name,script_file from vm_task where id=%d"%(self.id)
         res = self.db.select_sql(sql)
         # logger.info("init task data:%d",ret)
         if not res:
             raise TaskError,"%s sql get empty res"%(sql)
         self.task_name = res[0][1]
         self.script_file = res[0][2]
-        self.gen_type = res[0][3]
     
     def allot2(self):
         '''分配执行脚本替换掉默认的执行脚本
