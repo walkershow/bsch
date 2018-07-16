@@ -21,6 +21,11 @@ def is_pptp_succ():
             return True 
         return False
 
+def add_route():
+    cmd = "route add default dev ppp0"
+    ret = os.system(cmd)
+    return ret
+
 def dial():
     cmd = "pon debo"
     ret = os.system(cmd)
@@ -29,6 +34,8 @@ def dial():
     for i in range(10):
         if is_pptp_succ():
             ip,area_name = get_dialup_ip()
+            if ip:
+                add_route()
             return ip,area_name
         time.sleep(5)
     return None,None
@@ -54,7 +61,12 @@ def get_dialup_ip():
 
 
 def main():
-    dial()
+    ip, name = dial()
+    print ip,name
+    if ip:
+        print 'dial up'
+    else:
+        print "dial failed"
 
 if __name__ == "__main__":
     while True:

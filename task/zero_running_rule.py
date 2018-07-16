@@ -21,6 +21,7 @@ sys.path.append("..")
 import dbutil
 
 logger = None
+cardinal = 10000
 
 
 class ZeroTaskError(Exception):
@@ -31,9 +32,13 @@ class ZeroTask(object):
     '''零跑任务
     '''
 
-    def __init__(self, server_id, db):
+    def __init__(self, server_id, db,total_user_num=10000):
         self.db = db
         self.server_id = server_id
+        self.total_user_num = total_user_num
+        self.area_se = []
+        self.splice_num()
+        print self.area_se
 
     def get_task_type(self, task_id):
         sql = "select type from vm_task where id=%d " % (task_id)
@@ -42,35 +47,26 @@ class ZeroTask(object):
             return None
         return res[0][0]
 
-    def splice_profile(self, tty, area):
-        s = 1
-        e = 5001
-        if tty == 1:
-            if area == 1:
-                s = 1 
-                e = 800 
-            elif area == 2:
-                s = 801
-                e = 1600
-            else:
-                s = 1600
-                e = 2501
-        else:
-            if area == 1:
-                s = 2501 
-                e = 3300 
-            elif area == 2:
-                s = 3300
-                e = 4100 
-            else:
-                s = 4100
-                e = 5001
-        return s,e
+    def splice_num(self):
+        idx = self.total_user_num/cardinal
+        for i in range(0,idx):
+            s = cardinal*i+1 
+            e = cardinal*(i+1)+1
+            self.area_se.append((s,e))
 
-    def get_uninited_profiles(self, vm_id, tty, uty, area):
-        s,e = self.splice_profile(tty, area)
-        total_ids = range(s, e)
             
+        
+    def get_uninited_profiles(self, vm_id, tty, uty, area):
+        #se = self.area_se[area-1]        
+        #total_ids = range(se[0], se[1])
+        #all country mix dial mode
+        if tty == 1:
+            total_ids = range(1,5001)
+        elif tty == 2:
+            total_ids = range(5001,10001)
+        else:
+            raise Exception, "unkown tty:%d" % (tty)
+
         sql = '''select profile_id from vm_users where server_id={0}
         and vm_id={1} and user_type={2} and terminal_type={3} and
         area={4}'''.format(self.server_id,
@@ -158,31 +154,15 @@ class ZeroTask(object):
         if ret < 0:
             raise ZeroTaskError, "%s excute error;ret:%d" % (sql, ret)
 
-    def is_ceiling(self, terminal_type, user_type):
-        sql = "select 1 from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
-                and ran_times<run_times and server_id=%d and terminal_type=%d and user_type=%d"
-
-        sql = sql % (self.server_id, terminal_type, user_type)
-        # logger.info(sql)
-        res = self.db.select_sql(sql)
-        if res:
-            return False
-        return True
-
-    # def add_ran_times(self, id):
-    #     sql ="update zero_schedule_list set ran_times=ran_times+1 where id=%d"%(id)
-    #     print sql
-    #     ret = self.db.execute_sql(sql)
-    #     if ret<0:
-    #         raise ZeroTaskError,"%s excute error;ret:%d"%(sql, ret)
-
 
 if __name__ == '__main__':
-    dbutil.db_host = "192.168.1.21"
+    dbutil.db_host = "3.3.3.6"
     dbutil.db_name = "vm-test"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
-    zt = ZeroTask(1, dbutil)
-    profile_id = zt.get_usable_profiles(1, 0,1,1)
+    zt = ZeroTask(1, dbutil, 10000)
+    #s,e = zt.area_se
+    #print s,e
+    profile_id = zt.get_usable_profiles(1, 0,1,5)
     print profile_id
