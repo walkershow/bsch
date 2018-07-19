@@ -189,9 +189,9 @@ class TaskGroup(object):
                 id  = r[0]
                 uty = r[1]
                 tty = r[2]
-                if not TaskGroup.can_run_default(db, server_id ,vm_id, tty, uty):
-                    print "can not run this type:", uty, tty
-                    return None
+                #if not TaskGroup.can_run_default(db, server_id ,vm_id, tty, uty):
+                #    print "can not run this type:", uty, tty
+                #    return None
                 if tty == 1 and uty == 0:
                     task_id_list = task_id_list_pc_baidu
                 elif tty == 1 and uty != 0:
