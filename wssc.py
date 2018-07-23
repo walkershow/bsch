@@ -1,4 +1,3 @@
-
 # -*- coding: utf-8 -*-
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
@@ -454,7 +453,6 @@ def clean_all_firefox():
                 time.sleep(2)
 
 
-
 def update_status_and_time(db):
     sql = "update vm_list set `status` = 1, update_time = CURRENT_TIMESTAMP where server_id = %s and vm_id = %s" % (
         server_id, vm_id)
@@ -472,22 +470,26 @@ def removePath(destinationPath, elapsed):
                 pathFull = os.path.join(destinationPath, path)
                 if os.path.isdir(pathFull):
                     # if pathFull.find("_MEI") != -1:
-                    if pathFull.find("tmp") != -1 or pathFull.find('rust')!=-1:
+                    if pathFull.find("tmp") != -1 or pathFull.find(
+                            'rust') != -1:
                         m_time = int(os.path.getmtime(pathFull))
                         now_time = int(time.time())
-                        if now_time - m_time > elapsed: 
+                        if now_time - m_time > elapsed:
                             shutil.rmtree(pathFull, True)
                 # shutil.rmtree(destinationPath, True)
     except Exception, e:
         logger.error("delete tempdir error:%s", e.message)
 
+
 def testtime():
-    m_time = int(os.path.getmtime('/home/cp/tt.txt') )
+    m_time = int(os.path.getmtime('/home/cp/tt.txt'))
     now_time = int(time.time())
     print m_time, now_time
 
+
 def clean_tmp_profile(temp_dir, elapsed):
     removePath(temp_dir, elapsed)
+
 
 def clear_on_newday(temp_dir):
     global cur_date
