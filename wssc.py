@@ -1,9 +1,9 @@
-#!/usr/bin/env python
+
 # -*- coding: utf-8 -*-
 # File              : wssc.py
 # Author            : coldplay <coldplay_gz@sina.cn>
 # Date              : 18.05.2018 11:23:1526613811
-# Last Modified Date: 10.07.2018 11:46:1531194362
+# Last Modified Date: 20.07.2018 10:21:1532053275
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
 # -*- coding: utf-8 -*-
 '''
@@ -25,7 +25,7 @@ import traceback
 from utils import is_windows, tmp_dir
 import dbutil
 import psutil
-from tv import dial,dialoff
+from tv import dial, dialoff
 
 if is_windows():
     import singleton
@@ -57,7 +57,6 @@ def closeprocess(pname):
             command = "taskkill /F /IM {0}.exe".format(pname)
         else:
             command = "pkill {0}".format(pname)
-        print command
         os.popen(command)
         return True
     except Exception, e:
@@ -79,7 +78,6 @@ if is_windows():
         # 获得机器运行的时间
         run_time = kernel32.GetTickCount()
         elapsed = run_time - struct_lastinputinfo.dwTime
-        # print "[*] It's been %d milliseconds since the last input event."%elapsed
         return elapsed
 
 
@@ -87,8 +85,6 @@ def autoargs():
     global vm_id, server_id, wssc_path
     cur_cwd = os.getcwd()
     wssc_path = cur_cwd
-    print cur_cwd
-    #dirs = cur_cwd.split('\\')
     dirs = cur_cwd.split(os.sep)
     vmname = dirs[-2]
     vm_id = int(vmname[1:])
@@ -108,7 +104,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm-test",
+        default="vm-test2",
         help="database name, default is gamedb")
     parser.add_option(
         "-u",
@@ -155,7 +151,6 @@ def init():
     script_path = options.script_path
 
     if not os.path.exists(options.logconf):
-        print 'no exist:', options.logconf
         sys.exit(1)
 
     logging.config.fileConfig(options.logconf)
@@ -202,7 +197,6 @@ def is_vpn_dialup_3min():
         server_id)
     res = dbutil.select_sql(sql)
     if res:
-        print "dial up 3 mins!!!"
         return True
     else:
         return False
@@ -229,9 +223,7 @@ def kill_zombie_proc(interval=140):
     if not is_vpn_dialup_3min():
         return
     vms_time = get_max_update_time()
-    print vms_time
     redial_time = vpn_update_time()
-    print redial_time
     if not redial_time:
         return vm_ids
     for tid, item in vms_time.items():
@@ -263,13 +255,18 @@ def runcmd(task_id, id, user_type, task_group_id, terminal_type):
     script_name = get_script_name(task_id, task_group_id, user_type,
                                   terminal_type)
     script = os.path.join(script_path, script_name)
-    print "script:", script
     if not os.path.exists(script):
         logger.error("script:%s not exists", script)
         return False
     os.chdir(script_path)
     commands = [python_exec, script, "-t", str(id)]
     process = subprocess.Popen(commands)
+    # pid = os.fork()
+    # if pid == 0:
+    #     os.chdir(script_path)
+    #     cmd = "{0} {1} -t {2}".format(python_exec, script, str(id))
+    #     os.system(cmd)
+    #     exit()
     return True
 
 
@@ -328,7 +325,6 @@ def clean_all_chrome():
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
         if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-            # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
                     "firefox.exe") != -1:
                 proc.kill()
@@ -338,10 +334,8 @@ def find_proc_by_cmdline(cmdline):
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
         if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-            # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
                     cmdline) != -1:
-                print cmdline, "is exist"
                 return proc
     return None
 
@@ -390,7 +384,6 @@ def clear_timeout_task():
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
-        print res
         for r in res:
             id = r[0]
             task_id = r[1]
@@ -403,13 +396,10 @@ def clear_timeout_task():
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
             if not proc:
-                print cmd_findstr, "is not exist"
-                print "task is not running"
                 set_task_status(7, id)
                 update_task_allot_impl_sub(task_group_id, task_id)
             else:
                 logger.info("kill timeout task:%s", cmd_findstr)
-                print "kill timeout task:", cmd_findstr
                 proc.kill()
                 set_task_status(6, id)
                 update_task_allot_impl_sub(task_group_id, task_id)
@@ -421,7 +411,6 @@ def del_timeout_task():
     logger.info(sql)
     res = dbutil.select_sql(sql)
     if res:
-        print res
         for r in res:
             id = r[0]
             task_id = r[1]
@@ -434,8 +423,6 @@ def del_timeout_task():
             logger.info("find proc cmdline:%s", cmd_findstr)
             proc = find_proc_by_cmdline(cmd_findstr)
             if not proc:
-                print cmd_findstr, "is not exist"
-                print "task is not running"
                 set_task_status(7, id)
                 update_task_allot_impl_sub(task_group_id, task_id)
 
@@ -443,25 +430,21 @@ def del_timeout_task():
 def get_firefox():
     proc_list = []
     for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-        # print proc.info['name']
         if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-            # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
                     "firefox.exe --marionette") != -1:
-                print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
 
 
 def clean_all_firefox():
     plist = get_firefox()
-    if len(plist) >= 6:
-        print "****************firefox too much********************"
+    if len(plist) >= 2:
         closeprocess("firefox")
         closeprocess("geckodriver")
         sleep(3)
-        for i in range(1, 5):
+        for i in range(1, 3):
             if len(plist) <= 0:
                 break
             plist = get_firefox()
@@ -470,7 +453,6 @@ def clean_all_firefox():
                 closeprocess("geckodriver")
                 time.sleep(2)
 
-        print "********************clean all process********************"
 
 
 def update_status_and_time(db):
@@ -482,25 +464,34 @@ def update_status_and_time(db):
     return res
 
 
-def removePath(destinationPath):
+def removePath(destinationPath, elapsed):
     try:
         if os.path.exists(destinationPath):
             pathList = os.listdir(destinationPath)
             for path in pathList:
                 pathFull = os.path.join(destinationPath, path)
-                print pathFull
                 if os.path.isdir(pathFull):
-                    if pathFull.find("_MEI") != -1:
-                        removePath(pathFull)
-                shutil.rmtree(destinationPath, True)
+                    # if pathFull.find("_MEI") != -1:
+                    if pathFull.find("tmp") != -1 or pathFull.find('rust')!=-1:
+                        m_time = int(os.path.getmtime(pathFull))
+                        now_time = int(time.time())
+                        if now_time - m_time > elapsed: 
+                            shutil.rmtree(pathFull, True)
+                # shutil.rmtree(destinationPath, True)
     except Exception, e:
         logger.error("delete tempdir error:%s", e.message)
 
+def testtime():
+    m_time = int(os.path.getmtime('/home/cp/tt.txt') )
+    now_time = int(time.time())
+    print m_time, now_time
+
+def clean_tmp_profile(temp_dir, elapsed):
+    removePath(temp_dir, elapsed)
 
 def clear_on_newday(temp_dir):
     global cur_date
     today = datetime.date.today()
-    print "today:", today, "====", "cur_date:", cur_date
     if today != cur_date:
         logger.info("==========clear tempdir on new day start==========")
         removePath(temp_dir)
@@ -513,7 +504,6 @@ def clear_by_hours(temp_dir):
     global cur_date, cur_hour
     nowtime = datetime.datetime.now()
     nowhour = nowtime.hour
-    print "nowhour:", nowhour, "====", "cur_hour:", cur_hour
     if nowhour != cur_hour:
         logger.info("==========clear tempdir on new hour start==========")
         removePath(temp_dir)
@@ -540,28 +530,21 @@ def run_as_single():
 def main():
     run_as_single()
     init()
-    ip, area_name = "" , ""
+    ip, area_name = "", ""
     try:
         while True:
             try:
                 while True:
                     clean_all_firefox()
-                    if is_windows():
-                        clear_by_hours(tempdir)
+                    clean_tmp_profile(tempdir, 10)
                     r = new_task_come()
                     if r is not None:
-                        if r['task_group_id'] !=0:
-                            print "dial before start task"
-                            if dialoff():
-                                record_vpn_ip_areaname(2, ip, area_name)
-                            ip, area_name = dial()
-                            if not ip:
-                                print "dial unsuccessful"
-                                time.sleep(5)
-                                continue
-                            else:
-                                record_vpn_ip_areaname(1, ip, area_name)
-                        print "get task", r['task_id']
+                        # if r['task_group_id'] !=0:
+                        #     if dialoff():
+                        #         time.sleep(5)
+                        #         continue
+                        #     else:
+                        #         record_vpn_ip_areaname(1, ip, area_name)
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                      r['task_group_id'], r['terminal_type'])
                         if ret:
@@ -578,15 +561,12 @@ def main():
                     time.sleep(3)
 
             except Exception, e:
-                print 'first while traceback.print_exc():'
-                traceback.print_exc()
                 logger.error('exception on main_loop', exc_info=True)
                 time.sleep(5)
                 continue
 
     except Exception, e:
-        print 'traceback.print_exc():'
-        traceback.print_exc()
+        pass
         # logger.error('exception on main_loop', exc_info = True)
 
 
@@ -601,9 +581,8 @@ if __name__ == "__main__":
         # try:
         if True:
             # clear_by_hours('d:\\profiles')
+            # testtime()
             main()
         # except Exception, e:
-        # print 'traceback.print_exc():'
-        # traceback.print_exc()
-        # logger.error('exception on main_loop', exc_info=True)
-        # time.sleep(5)
+        #     logger.error('exception on main_loop', exc_info=True)
+        #     time.sleep(5)
