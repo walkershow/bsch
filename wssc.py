@@ -483,20 +483,27 @@ def update_status_and_time(db):
     return res
 
 
-def removePath(destinationPath):
+def removePath(destinationPath, elapsed):
     try:
         if os.path.exists(destinationPath):
             pathList = os.listdir(destinationPath)
             for path in pathList:
                 pathFull = os.path.join(destinationPath, path)
-                print pathFull
                 if os.path.isdir(pathFull):
-                    if pathFull.find("_MEI") != -1:
-                        removePath(pathFull)
-                shutil.rmtree(destinationPath, True)
+                    # if pathFull.find("_MEI") != -1:
+                    if pathFull.find("tmp") != -1 or pathFull.find(
+                            'rust') != -1:
+                        m_time = int(os.path.getmtime(pathFull))
+                        now_time = int(time.time())
+                        if now_time - m_time > elapsed:
+                            shutil.rmtree(pathFull, True)
+                # shutil.rmtree(destinationPath, True)
     except Exception, e:
         logger.error("delete tempdir error:%s", e.message)
 
+
+def clean_tmp_profile(temp_dir, elapsed):
+    removePath(temp_dir, elapsed)
 
 def clear_on_newday(temp_dir):
     global cur_date
@@ -547,8 +554,7 @@ def main():
             try:
                 while True:
                     clean_all_firefox()
-                    if is_windows():
-                        clear_by_hours(tempdir)
+                    clean_tmp_profile(tempdir, 10)
                     r = new_task_come()
                     if r is not None:
                         #if r['task_group_id'] !=0:
