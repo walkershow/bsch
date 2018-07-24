@@ -108,7 +108,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm-test",
+        default="vm-test2",
         help="database name, default is gamedb")
     parser.add_option(
         "-u",
@@ -330,7 +330,7 @@ def clean_all_chrome():
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
             # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
-                    "firefox.exe") != -1:
+                    "firefox") != -1:
                 proc.kill()
 
 
@@ -448,7 +448,7 @@ def get_firefox():
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
             # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
-                    "firefox.exe --marionette") != -1:
+                    "firefox-esr --marionette") != -1:
                 print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
@@ -456,12 +456,13 @@ def get_firefox():
 
 def clean_all_firefox():
     plist = get_firefox()
-    if len(plist) >= 6:
+    print plist
+    if len(plist) >2:
         print "****************firefox too much********************"
         closeprocess("firefox")
         closeprocess("geckodriver")
-        sleep(3)
-        for i in range(1, 5):
+        time.sleep(3)
+        for i in range(0, 2):
             if len(plist) <= 0:
                 break
             plist = get_firefox()
@@ -550,17 +551,17 @@ def main():
                         clear_by_hours(tempdir)
                     r = new_task_come()
                     if r is not None:
-                        if r['task_group_id'] !=0:
-                            print "dial before start task"
-                            if dialoff():
-                                record_vpn_ip_areaname(2, ip, area_name)
-                            ip, area_name = dial()
-                            if not ip:
-                                print "dial unsuccessful"
-                                time.sleep(5)
-                                continue
-                            else:
-                                record_vpn_ip_areaname(1, ip, area_name)
+                        #if r['task_group_id'] !=0:
+                        #    print "dial before start task"
+                        #    if dialoff():
+                        #        record_vpn_ip_areaname(2, ip, area_name)
+                        #    ip, area_name = dial()
+                        #    if not ip:
+                        #        print "dial unsuccessful"
+                        #        time.sleep(5)
+                        #        continue
+                        #    else:
+                        #        record_vpn_ip_areaname(1, ip, area_name)
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                      r['task_group_id'], r['terminal_type'])
