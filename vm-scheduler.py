@@ -33,6 +33,7 @@ import task.parallel
 from task.parallel import ParallelControl
 from task.rolling_user import UserAllot
 from task.user_ec import UserAllot_EC
+from task.user_rest import UserAllot as UserAllot_Rest
 from task.user_rolling7 import UserAllot as UserAllot7
 from logbytask.logtask import LogTask
 from manvm import CManVM
@@ -61,8 +62,9 @@ g_pb                 = 4
 g_pc                 = None
 exit_flag            = False
 g_user               = None
-g_userec               = None
-g_user7               = None
+g_userrest           = None
+g_userec             = None
+g_user7              = None
 g_manvm              = None
 
 
@@ -201,6 +203,7 @@ def vm_business(vm_id):
         sqltmp = sql_count % (g_serverid, vm_id)
         res = dbutil.select_sql(sqltmp)
         count = 0
+        print res
         if res:
             count = res[0][0]
         # logger.warn("running task vm:%d,count:%d", vm_id, count)
@@ -211,8 +214,9 @@ def vm_business(vm_id):
                             没有可运行任务名额,只能跑零跑任务"), vm_id)
             # logger.error(
                 # utils.auto_encoding("==========进入任务分配=========="))
+            print "the pri-id:", g_rcv
             ret = g_taskallot.allot_by_priority(
-                vm_id )
+                vm_id,g_rcv )
             print "get task", ret
             if not ret:
                 logger.warn(
@@ -230,6 +234,7 @@ def vm_business(vm_id):
 
 def main_loop():
     # 获取运行状态,请求运行的vm
+    global g_rcv
     vm_names, vm_ids = vms.get_vms(g_serverid)
     # vm_ids = [1,2]
     # vm_names = ['w1', 'w2']
@@ -238,6 +243,7 @@ def main_loop():
             g_rcv = is_run_as_single()
             print "gcv:", g_rcv
             if not g_rcv:
+                print "==============================================="
                 for i in range(0, len(vm_ids)):
                     vm_id = vm_ids[i]
                     vm_business(vm_id)
@@ -377,9 +383,10 @@ def init():
     g_pc = ParallelControl(g_serverid, dbutil, logger)
     g_user = UserAllot(g_serverid, g_pc, dbutil, logger)
     g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
+    g_userrest = UserAllot_Rest(g_serverid, g_pc, dbutil, logger)
     g_user7= UserAllot7(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
-            g_userec, g_user7, dbutil, logger)
+            g_userec, g_user7,g_userrest, dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)

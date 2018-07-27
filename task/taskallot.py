@@ -13,17 +13,19 @@
 @Last Modified time: 2017-05-13 16:32:04
 '''
 
-import sys
 import datetime
-import time
 import logging
 import logging.config
-from taskgroup import TaskGroup
+import sys
+import time
+
+sys.path.append("..")
 import dbutil
 import utils
-from task import TaskError
 from parallel import ParallelControl
-sys.path.append("..")
+from task import TaskError
+from taskgroup import TaskGroup
+
 
 
 class TaskAllotError(Exception):
@@ -34,7 +36,8 @@ class TaskAllot(object):
     '''任务分配'''
     logger = None
 
-    def __init__(self, want_init, server_id, pc, user, user_ec, user7, db, logger):
+    def __init__(self, want_init, server_id, pc, user, user_ec, user7,
+            user_rest, db, logger):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
@@ -44,6 +47,8 @@ class TaskAllot(object):
         self.user = user
         self.user_ec = user_ec
         self.user7 = user7
+        self.user_rest = user_rest
+        print self.user, self.user_rest
         self.logger = logger
         self.task_group = TaskGroup(db)
         # self.lock = utils.Lock("/tmp/lock-sched.lock")
@@ -58,55 +63,91 @@ class TaskAllot(object):
     def reset_when_newday(self):
         '''新的一天重置所有运行次数'''
         today = datetime.date.today()
-        print today, self.cur_date
         if today != self.cur_date:
             self.cur_date = today
 
             # #统一到一个w = 1的进程进行更新
             # if self.want_init == 1:
-            # print "start new day to reinit..."
             # #self.logger.info("start new day to reinit...")
             # TaskGroup.reset_rantimes_today(self.db)
             # TaskGroup.reset_rantimes_allot_impl(self.db)
             # self.cur_date = today
-            # print "cur_date", self.cur_date
-            # print "end new day to reinit..."
             #self.logger.info("end new day to reinit...")
-    def wait_interval(self, gid):
-        sql = '''select 1 from vm_cur_task where 
-        inter_time>0 and task_group_id=%d and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        ) and start_time>current_date''' % (gid, 5, 5, 5)
+    def get_taskgroup_lastid(self,gid):
+        sql = '''select last_id,parralle_times from log_taskgroup_lastid where
+        task_group_id={0}'''.format(gid)
         self.logger.info(sql)
         res = dbutil.select_sql(sql)
         if res and len(res) >= 1:
+            return res[0][0],res[0][1]
+        return None,None
+
+    def set_taskgroup_lastid(self,id,gid):
+        #默认每个间隔2次
+        sql = ''' insert into
+        log_taskgroup_lastid(task_group_id,last_id,parralle_times)
+        values({0},{1},{2}) on duplicate key update last_id={1}'''.format(gid,id,2)
+        self.logger.info(sql)
+        ret = dbutil.execute_sql(sql)
+        if ret<0:
+            logger.error("set_taskgroup_lastId failed:%d", ret)
+
+    def is_inited_start(self,gid):
+        sql ='''select max(id) from vm_cur_task where task_group_id={0} and
+        inter_time>0 and start_time>current_date'''.format(gid)
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        if res and len(res) >= 1:
+            return res[0][0]
+        return None
+
+    def wait_interval(self, gid):
+        max_id = self.is_inited_start(gid)
+        print "get max_id:", max_id
+        if not max_id: 
+            return True
+        sql = '''select 1 from vm_cur_task where id=%d and ( 
+        round((UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(start_time))/60)>5
+        ) and start_time>current_date''' % (max_id)
+
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        
+        if res and len(res) >= 1:
+            self.set_taskgroup_lastid(max_id,gid)
             return True
         return False
 
-    def get_band_interval_groupids(self):
-        '''get inter task which running or ran in 5mins
-        '''
-        group_ids = []
-        sql = '''select task_group_id from vm_cur_task where 
-        inter_time>0 and ( 
-        update_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or start_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        or succ_time>=DATE_SUB(NOW(),INTERVAL %d MINUTE)
-        ) and start_time>current_date''' % (5, 5, 5)
+    def can_allot_rest(self, gid):
+        max_id,pt = self.get_taskgroup_lastid(gid)
+        if not max_id:
+            return False
+        sql = '''select count(1) from vm_cur_task where id>%d and
+        task_group_id=%d and start_time>current_date''' % (max_id, gid)
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        if res and len(res) >= 1:
+            count = res[0][0]
+            if count>=pt:
+                return False
+            return True
+        return False
+
+    def get_group_type(self, gid):
+        sql = '''select type_id from vm_task_group_type where
+        task_group_id={0}'''.format(gid)
         self.logger.debug(sql)
         res = dbutil.select_sql(sql)
-        for r in res:
-            id = r[0]
-            group_ids.append(id)
+        if not res:
+            return None
+        return res[0][0]
 
-        return group_ids
 
     def get_band_run_groupids(self):
         '''获取运行状态的任务组
         '''
         group_ids = []
+        type_ids = ()
         sql = '''select task_group_id from vm_cur_task where server_id=%d and
            status in(-1,1) and task_group_id !=0 and start_time>current_date
            ''' % (self.server_id)
@@ -117,15 +158,8 @@ class TaskAllot(object):
             #并行数爆了,才加入band group
             if self.pc.is_ran_out_parallel_num(id):
                 group_ids.append(id)
-        print 'band group_ids:', group_ids
-        # 任务多时会导致本可运行运行
-        # inter_group_ids = self.get_band_interval_groupids()
-        # print 'inter_group_ids:',inter_group_ids
-        # group_ids.extend(inter_group_ids)
-        # print "extend groupid", group_ids
 
         pout_ids_set = self.pc.get_ran_out_parallel_task_set()
-        print pout_ids_set
         return set(group_ids) | pout_ids_set
 
     def vpn_update_time(self):
@@ -136,7 +170,6 @@ class TaskAllot(object):
             update_time = res[0][0]
             ip = res[0][1]
             area = int(res[0][2])
-            print update_time
             return update_time, ip, area
         return None, None,None
 
@@ -148,6 +181,25 @@ class TaskAllot(object):
             return res[0][0]
         return '1970-1-1 00:00:00'
 
+    def grouptype_last_succ_time(self, type_id):
+        sql = '''select a.succ_time from vm_cur_task a, vm_task_group_type b where 
+        a.server_id={0} and a.task_group_id=b.task_group_id and
+        b.type_id={1}  order by a.start_time desc limit 5'''.format(self.server_id, type_id)
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        print res
+        count = len(res)
+        if count <= 0 :
+            return True, '1970-1-1 00:00:00'
+        else:
+            succ_time = res[0][0]
+            if succ_time is None:
+                return False,None
+            else:
+                return True,succ_time
+            
+
+
     def task_last_succ_time(self, task_id):
         sql = '''select max(succ_time) from vm_cur_task where server_id=%d and
         cur_task_id=%d and status>=2''' % (self.server_id, task_id)
@@ -158,12 +210,10 @@ class TaskAllot(object):
 
     def gen_rand_minutes(self, standby_time):
         standby_time_arr = standby_time.split(",")
-        print "time_arr", standby_time_arr
         stimes = map(int, standby_time_arr)
         if len(stimes)==1:
             stimes.append(stimes[0])
         randtime = random.randint(stimes[0],stimes[1])
-        print "rantime",randtime
         return randtime
 
     def task_interval_setting(self, task_id):
@@ -243,6 +293,15 @@ class TaskAllot(object):
 
     def right_to_allot(self, task_group_id):
         #return True
+        type_id = self.get_group_type(task_group_id)
+        print "type_id:", type_id
+        type_succ_time = None
+        can_allot = True
+        if type_id:
+            can_allot,type_succ_time = self.grouptype_last_succ_time(type_id)
+            print can_allot, type_succ_time
+            if not can_allot:
+                return False,None
         succ_time = self.vm_last_succ_time(task_group_id)
         if succ_time is None:
             succ_time = '1970-1-1 00:00:00'
@@ -253,22 +312,30 @@ class TaskAllot(object):
         if redial_time:
             rtime = time.strptime(str(redial_time), "%Y-%m-%d %H:%M:%S")
             stime = time.strptime(str(succ_time), "%Y-%m-%d %H:%M:%S")
+            if type_succ_time is not None:
+                ttime = time.strptime(str(type_succ_time), "%Y-%m-%d %H:%M:%S")
+                self.logger.info("type_id:%d,type_last_succ_time:%s, redial_time:%s",
+                         type_id, type_succ_time, redial_time)
+                if ttime>rtime:
+                    self.logger.warn("type_id:%d type_succ_time>=redial_time",
+                                 type_id)
+                    return False, None
 
             if stime < rtime:
                 return True, area
             else:
                 self.logger.warn("task_group_id:%d succ_time>=redial_time",
                                  task_group_id)
-            # if self.task_interval(task_id, stime):
-                # return False
         return False,None
 
-    def get_candidate_gid(self, vm_id, type=1):
-        type_str = ">"
-        if type == 0:
-            type_str = ">"
-        else:
-            type_str = "="
+
+
+    def get_candidate_gid(self, vm_id, pri_id=0):
+        # type_str = ">"
+        # if type == 0:
+            # type_str = ">"
+        # else:
+            # type_str = "="
         sql = '''SELECT
                         distinct a.id
                     FROM
@@ -290,21 +357,19 @@ class TaskAllot(object):
                     AND a.ran_times < a.allot_times
                     AND b.id > 0
                     AND c.task_group_id = a.id
-                    and b.priority %s 0
-                    AND f.server_id = %d ''' % (type_str, self.server_id)
-        if type == 0:
-            sql = sql + " order by b.priority"
+                    and b.priority = %d 
+                    AND f.server_id = %d ''' % (pri_id, self.server_id)
+        # if type == 0:
+            # sql = sql + " order by b.priority"
         self.logger.info(sql)
         res = self.db.select_sql(sql)
+        print "get res in pri", res
         ids = set()
         rid_set = self.get_band_run_groupids()
-        if type == 0:
+        if pri_id > 0:
             if res and len(res)>0:
-                print "get pri task:", res[0][0]
                 if res[0][0] not in rid_set:
-                    print "append single task:", res[0][0]
                     self.selected_ids.append(res[0][0])
-                    print self.selected_ids
             return 
         for r in res:
             ids.add(r[0])
@@ -312,7 +377,6 @@ class TaskAllot(object):
         self.logger.info("band task_group_id:%s", band_str)
 
         self.selected_ids = list(set(ids) - rid_set)
-        print self.selected_ids
 
     def get_candidate_gid2(self, vm_id):
         sql = '''SELECT
@@ -330,6 +394,7 @@ class TaskAllot(object):
                     AND c.task_group_id = b.id
                     AND b.ran_times < b.times
                     AND b.id > 0
+                    and d.user_type = 99
                     AND f.server_id = %d order by b.id''' % (self.server_id)
         self.logger.info(sql)
         res = self.db.select_sql(sql)
@@ -359,7 +424,61 @@ class TaskAllot(object):
             return None
         return task
 
-    def allot_by_priority(self, vm_id):
+    def get_allot_task(self, vm_id, pri_id, brest):
+        task,gid = None,None
+        ret = False
+        self.reset_when_newday()
+        if not brest:
+            self.get_candidate_gid(vm_id)
+            if pri_id > 0:
+                self.get_candidate_gid(vm_id, pri_id)
+        else:
+            self.get_candidate_gid2(vm_id)
+
+        # self.get_candidate_gid2(vm_id)
+        while self.selected_ids:
+            ret = False
+            gid = self.selected_ids.pop()
+            self.logger.info(
+                "====================handle gid:%d====================",
+                gid)
+            try:
+                with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
+                    # 放在里面否则可能出现多个任务不按间隔时间跑
+                    rid_set = self.get_band_run_groupids()
+                    print "band groupid:", rid_set
+                    if gid in rid_set:
+                        self.logger.error("gid:%d is banded", gid)
+                        continue
+                    if not self.wait_interval(gid):
+                        if not self.can_allot_rest(gid):
+                            self.logger.info("gid:%d should wait 5 mins",
+                                             gid)
+                            continue
+                    ret, area = self.right_to_allot(gid)
+                    if ret:
+                        self.logger.info("get valid gid:%d", gid)
+                    else:
+                        # self.logger.warn("wait for redial:%d", gid)
+                        continue
+
+                    task = self.handle_taskgroup(gid, vm_id, area)
+                    if task:
+                        self.logger.info("get the gid:%d  task:%d", gid,task.id)
+                        ret = True
+                        # self.add_ran_times(task.id, gid, task.rid)
+                        break
+                    else:
+                        continue
+            except Exception, e:
+                self.logger.error('exception on lock', exc_info=True)
+                self.logger.info("exception in lock, timeout")
+                self.selected_ids.append(gid)
+                # time.sleep(20)
+                continue
+        return task,gid
+
+    def allot_by_priority(self, vm_id, pri_id):
         try:
             task, gid, ret = None, 0, True
             task = self.allot_by_default(vm_id, 0)
@@ -375,45 +494,9 @@ class TaskAllot(object):
                 ret = False
                 task = self.allot_by_default(vm_id, 7)
             if not task:
-                ret = False
-                self.reset_when_newday()
-                self.get_candidate_gid(vm_id, 1)
-                self.get_candidate_gid(vm_id, 0)
-                # self.get_candidate_gid2(vm_id)
-                print "selected ids:", self.selected_ids
-                while self.selected_ids:
-                    ret = False
-                    gid = self.selected_ids.pop()
-                    self.logger.info(
-                        "====================handle gid:%d====================",
-                        gid)
-                    try:
-                        with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
-                            # 放在里面否则可能出现多个任务不按间隔时间跑
-                            if self.wait_interval(gid):
-                                self.logger.info("gid:%d should wait 5 mins",
-                                                 gid)
-                                continue
-                            ret, area = self.right_to_allot(gid)
-                            if ret:
-                                self.logger.info("get valid gid:%d", gid)
-                            else:
-                                # self.logger.warn("wait for redial:%d", gid)
-                                continue
-
-                            task = self.handle_taskgroup(gid, vm_id, area)
-                            if task:
-                                self.logger.info("get the task:%d", task.id)
-                                ret = True
-                                self.add_ran_times(task.id, gid, task.rid)
-                                break
-                            else:
-                                continue
-                    except Exception, e:
-                        self.logger.error('exception on lock', exc_info=True)
-                        self.logger.info("exception in lock, timeout")
-                        print "exception in lock", e
-                        continue
+                task,gid = self.get_allot_task(vm_id,pri_id, False)
+            if not task:
+                task,gid = self.get_allot_task(vm_id,pri_id, True)
             else:
                 ret = True
                 self.add_ran_times(task.id, gid, task.rid)
@@ -445,9 +528,10 @@ class TaskAllot(object):
             ret = self.user7.allot_user(vm_id, task_group_id, task.id, area)
         elif uty == 6:
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
+        elif uty == 99:
+            ret = self.user_rest.allot_user(vm_id, task_group_id, task.id)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id, area)
-        print "the allot user ret", ret
         if not ret:
             self.logger.warn(
                 "vm_id:%d,task_id:%d,task_group_id:%d no user to run", vm_id,
@@ -486,10 +570,8 @@ def allot_test(dbutil):
     '''任务分配测试
     '''
     task_group_id = None
-    print len(sys.argv)
     if len(sys.argv) > 1:
         task_group_id = int(sys.argv[1])
-        print task_group_id
         TaskGroup.reset_rantimes_by_task_group_id(dbutil, task_group_id)
         # while True:
         #     t.allot_by_priority("d:\\10.bat")
@@ -504,35 +586,51 @@ def allot_test(dbutil):
             t.reset_when_newday()
             time.sleep(10)
         except Exception, e:
-            print "except", e
             time.sleep(5)
             continue
 
 
-def getTask(dbutil, logger):
+# def getTask(dbutil, logger):
+def getTask():
+    import random
     from rolling_user import UserAllot
-    pc = ParallelControl(11, dbutil, logger)
-    user = UserAllot(11, pc, dbutil, logger)
-    t = TaskAllot(0, 11, pc, user, None,None, dbutil, logger)
+    from user_rest import UserAllot as UserRest
+    dbutil.db_host = "192.168.1.21"
+    # dbutil.db_host = "3.3.3.6"
+    # dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
+    dbutil.db_user = "dba"
+    dbutil.db_port = 3306
+    dbutil.db_pwd = "chinaU#2720"
+    logger = get_default_logger()
+    # sid=[8,11,16,18,19,21,23]
+    # s = random.choice(sid)
+    s = server_id
+    print("==========server id:%d==========", s)
+    # time.sleep(10)
+    pc = ParallelControl(s, dbutil, logger)
+    user = UserAllot(s, pc, dbutil, logger)
+    urest = UserRest(s, pc, dbutil, logger)
+    t = TaskAllot(0, s, pc, user, None,None,urest, dbutil, logger)
 
     # t.allot_by_default(2, 0)
     # t.allot_by_default(2, 7)
     # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
-    while True:
-        ret = t.allot_by_priority(5)
-        print ret
-        time.sleep(5)
+    ret = t.allot_by_priority(1, 0)
+    # while True:
+        # ret = t.allot_by_priority(5, 115)
+        # time.sleep(3)
         # break
 
 
 def get_default_logger():
     logger = logging.getLogger()
-    logger.setLevel(logging.DEBUG)
+    # logger.setLevel(logging.INFO)
 
     # console logger
     ch = logging.StreamHandler()
-    ch.setLevel(logging.DEBUG)
+    ch.setLevel(logging.INFO)
     formatter = logging.Formatter(
         "[%(asctime)s] [%(process)d] [%(module)s::%(funcName)s::%(lineno)d] [%(levelname)s]: %(message)s"
     )
@@ -540,7 +638,7 @@ def get_default_logger():
     logger.addHandler(ch)
     return logger
 
-
+server_id = 1
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
     # dbutil.db_host = "3.3.3.6"
@@ -550,4 +648,22 @@ if __name__ == '__main__':
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"
     logger = get_default_logger()
-    getTask(dbutil, logger)
+    global server_id
+    server_id =int(sys.argv[1])
+    getTask()
+
+    # import threading
+    # # for i in range(0,1):
+    # t2 = threading.Thread(target=getTask, name="test")
+    # t2.start()
+    # t3 = threading.Thread(target=getTask, name="test")
+    # t3.start()
+    # t4 = threading.Thread(target=getTask, name="test")
+    # t4.start()
+    # t5 = threading.Thread(target=getTask, name="test")
+    # t5.start()
+    # t6 = threading.Thread(target=getTask, name="test")
+    # t6.start()
+    # t7 = threading.Thread(target=getTask, name="test")
+    # t7.start()
+        # getTask(dbutil, logger)

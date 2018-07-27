@@ -46,7 +46,6 @@ class TaskGroup(object):
                      time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time)
                      and a.ran_times<a.allot_times and a.id={0} and
                      a.task_id={1} ''' .format(task_group_id, task_id)
-        print sql
         res = self.db.select_sql(sql)
         if res and len(res)>0:
             return True
@@ -56,11 +55,9 @@ class TaskGroup(object):
     # groupid:0 表示默认任务
     def __initValidTasks(self, task_group_id):
         if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
-            print self.task_group_dict[task_group_id]    
             self.id = task_group_id
             return self.task_group_dict[task_group_id].pop()
         else:
-            print "init task list"
             # sql = "select b.id,b.task_id,a.start_time,a.end_time,a.allot_times,a.ran_times from vm_task_allot_impl a,vm_task_group b, vm_task c where b.id=%d \
                     # and b.task_id=a.task_id and b.id =a.id and a.task_id=c.id and c.status=1 \
                     # and time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time) \
@@ -85,9 +82,9 @@ class TaskGroup(object):
             AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
             AND time_to_sec(a.end_time)
             AND a.ran_times < a.allot_times
+            AND b.ran_times < b.times
             AND b.id > 0
             ORDER BY rand()'''.format(task_group_id)
-            # print sql
             res = self.db.select_sql(sql)
             task = {}
             self.tasks = []
@@ -101,23 +98,20 @@ class TaskGroup(object):
                     # 'is_default': False
                 # }
                 if not self.task_group_dict.has_key(task_group_id):
-                    print "init task_group_id:", task_group_id
                     self.task_group_dict[task_group_id]=[row[1]]
                 else:
-                    print "append task"
                     self.task_group_dict[task_group_id].append(row[1])
-            self.id = task_group_id
-            return self.task_group_dict[task_group_id].pop()
+            if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
+                self.id = task_group_id
+                return self.task_group_dict[task_group_id].pop()
         return None
 
          
-
     def __initValidTasks2(self):
         sql = "select b.id,b.task_id from vm_task_group b, vm_task c where b.id=%d \
                 and b.task_id=c.id and c.status=1 \
                 and b.ran_times<b.times and b.id>0 order by rand()" % (
             self.id)
-        print(sql)
 
         res = self.db.select_sql(sql)
         task = {}
@@ -150,7 +144,6 @@ class TaskGroup(object):
             sql = sql + " user_type != 0 and terminal_type=2"
         sql = sql % (server_id, vm_id)
         # logger.info(sql)
-        print sql
         res = db.select_sql(sql)
         if res:
             count = res[0][0]
@@ -173,7 +166,6 @@ class TaskGroup(object):
             sql = sql % (server_id, vm_id)
 
         # logger.info(sql)
-        print sql
         res                     = db.select_sql(sql)
         dtask                   = []
         task_id_list            = []
@@ -183,14 +175,12 @@ class TaskGroup(object):
         10012, 10012]
         task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011, 
         None, None]
-        print res
         if res:
             for r in res:
                 id  = r[0]
                 uty = r[1]
                 tty = r[2]
                 if not TaskGroup.can_run_default(db, server_id ,vm_id, tty, uty):
-                    print "can not run this type:", uty, tty
                     return None
                 if tty == 1 and uty == 0:
                     task_id_list = task_id_list_pc_baidu
@@ -203,9 +193,7 @@ class TaskGroup(object):
                     task_id_list = task_id_list_mobi
                 else:
                     logger.error("unkonw tty:%d,uty:%d",tty, uty)
-                print task_id_list
                 task_id = task_id_list[uty]
-                print "get task_id",task_id
                 if task_id is None:continue
                 task = {
                     'id': id,
@@ -232,7 +220,6 @@ class TaskGroup(object):
     def add_ran_times(self, task_id):
         sql = "update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d" % (
             self.id, task_id)
-        print sql
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
@@ -240,7 +227,6 @@ class TaskGroup(object):
     def add_ran_times2(self, task_id, task_group_id):
         sql = "update vm_task_group set ran_times=ran_times+1 where id=%d and task_id=%d" % (
             task_group_id, task_id)
-        print sql
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
@@ -283,18 +269,13 @@ class TaskGroup(object):
         #sql_alltask = "select task_id, times from vm_task_group a,vm_task b where id=%d and a.task_id=b.id and b.status=1"
 
         res = db.select_sql(sql)
-        # print res
         for r in res:
-            print r
             id = r[0]
             total = r[1]
             templ_id = r[2]
             sql = sql_alltask % (id)
-            print "task_group_id:", id, "-----total:", total
             if total == 0 or total is None:
-                print "continue to next "
                 continue
-            # print "all_task:",sql
             res_alltask = db.select_sql(sql)
             task_dict = {}
             task_templ_dict = {}
@@ -302,21 +283,16 @@ class TaskGroup(object):
                 if t[1] > 0:
                     task_dict[t[0]] = t[1]
                     task_templ_dict[t[0]] = 0
-            print "task_dict:", task_dict
             sql = sql_templ % (templ_id)
-            print "templ:", sql
             res = db.select_sql(sql)
             for r in res:
-                print "templ row:", r
                 p = r[0]
                 start_time = int(r[1])
                 end_time = int(r[2])
-                # print "start_time,end_time",start_time,end_time
                 templ_id = r[3]
                 templ_sub_id = r[4]
                 detail_id = r[5]
                 cur_allot_num = int(round(total * p / 100))
-                print "cur_allot_num", cur_allot_num
 
                 if cur_allot_num == 0:
                     continue
@@ -333,13 +309,11 @@ class TaskGroup(object):
                         task_dict[task_id] = task_dict[task_id] - 1
                         task_templ_dict[task_id] = task_templ_dict[task_id] + 1
                         allot_total = allot_total - 1
-                        # print task_dict
                         cnt = task_dict[task_id]
                         if cnt <= 0:
                             task_dict.pop(task_id)
                         if allot_total <= 0:
                             break
-                print task_templ_dict
                 for t, n in task_templ_dict.items():
                     allot_times = n
                     if allot_times == 0:
@@ -350,13 +324,11 @@ class TaskGroup(object):
                     sql_impl = sql % (id, task_id, start_time, end_time,
                                       allot_times, templ_id, templ_sub_id,
                                       detail_id)
-                    # print sql_impl
                     task_templ_dict[task_id] = 0
                     ret = db.execute_sql(sql_impl)
                     if ret < 0:
                         raise TaskGroupError, "%s excute error;ret:%d" % (
                             sql_impl, ret)
-            print "=========task_group_id:", id, "-----total:", total, " finish!!!!"
 
     @staticmethod
     def impl_task_templ_detail(db, task_group_id=None):
@@ -380,8 +352,6 @@ class TaskGroup(object):
         res = db.select_sql(sql)
         for r in res:
             id, task_id, allot_times, templ_id, templ_sub_id, detail_id, start_time, end_time = r
-            # print r
-            # print allot_times
             sql = "select id,start_min,end_min from vm_task_allot_templ_detail where id=%d order by sub_id" % (
                 detail_id)
             res = db.select_sql(sql)
@@ -401,7 +371,6 @@ class TaskGroup(object):
                     %d,%d, %d, CURRENT_TIMESTAMP) on duplicate key update allot_times=allot_times+1 '''
                 sql_impl = sql % (id, task_id, start_time, start, start_time,
                                   end, one_times, templ_id, templ_sub_id)
-                # print sql_impl
                 ret = db.execute_sql(sql_impl)
                 if ret < 0:
                     raise TaskGroupError, "%s excute error;ret:%d" % (sql_impl,
@@ -451,8 +420,7 @@ class TaskGroup(object):
             if tid:
                 if self.can_be_run(task_group_id, tid):
                     return Task(tid, False, self.db)
-                else:
-                    print "taskid:{0} cannot run".format(tid)
+
             else:
                 break
         return None
@@ -473,8 +441,6 @@ def test_choose_task():
     tg = TaskGroup(dbutil)
     for i in xrange(2):
         t = tg.choose_vaild_task(11,307)
-        print t
-        print t.id
 
 if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
