@@ -42,7 +42,6 @@ class ZeroTask(object):
             "terminal_type={3}) and server_id={0} and vm_id={1} "\
             "and b.terminal_type = {3} and a.profile_id=b.id and a.area={4}"\
             .format( self.server_id, vm_id, uty, tty, area)
-        print sql
         res = self.db.select_sql(sql)
         profile_ids = []
         for r in res:
@@ -99,19 +98,15 @@ class ZeroTask(object):
 
         uninited_profiles = self.get_uninited_profiles(vm_id, terminal_type,
                                                        uty, area)
-        # print uninited_profiles
         if uninited_profiles:
-            print "...use uninited profile..."
             profile_id = random.choice(uninited_profiles)
             self.log_vm_user(vm_id, profile_id, terminal_type, user_type, area)
             return profile_id
 
         all_profiles = self.get_inited_profiles(vm_id, terminal_type, uty,area)
         used_profiles = self.get_used_profiles(vm_id, uty)
-        # print all_profiles, used_profiles
         usable_profiles = list(
             set(all_profiles).difference(set(used_profiles)))
-        # print usable_profiles
         profile_id = None
         if usable_profiles:
             profile_id = random.choice(usable_profiles)
@@ -138,7 +133,6 @@ class ZeroTask(object):
 
     # def add_ran_times(self, id):
     #     sql ="update zero_schedule_list set ran_times=ran_times+1 where id=%d"%(id)
-    #     print sql
     #     ret = self.db.execute_sql(sql)
     #     if ret<0:
     #         raise ZeroTaskError,"%s excute error;ret:%d"%(sql, ret)
@@ -152,4 +146,3 @@ if __name__ == '__main__':
     dbutil.db_pwd = "123456"
     zt = ZeroTask(1, dbutil)
     profile_id = zt.get_usable_profiles(1, 0,1,1)
-    print profile_id

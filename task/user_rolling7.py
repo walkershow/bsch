@@ -83,7 +83,7 @@ class UserAllot(object):
 
     def get_rolling_time(self, task_id):
         sql = '''select rolling_time from vm_task_rolling7 where task_id={0}
-                and done=1'''.format(task_id)
+                and done=1 order by rolling_time desc'''.format(task_id)
         self.logger.info(sql)
         res = self.db.select_sql(sql)
         print res
@@ -268,7 +268,7 @@ class UserAllot(object):
         print server_ids
         if server_ids :
             if self.server_id in server_ids:
-                logger.info("此服务器:%d已登记使用完", self.server_id)
+                self.logger.info("此服务器:%d已登记使用完", self.server_id)
                 return False
         self.used_day_set, last_used_day = self.used_days(task_id, time_seq)
         self.log_used_day_set = self.used_day_set[:]
