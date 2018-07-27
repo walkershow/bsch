@@ -22,10 +22,11 @@ import subprocess
 import sys
 import time
 import traceback
-from utils import is_windows, tmp_dir
+
 import dbutil
 import psutil
-from tv import dial,dialoff
+from tv import dial, dialoff
+from utils import is_windows, tmp_dir
 
 if is_windows():
     import singleton
@@ -33,6 +34,7 @@ if is_windows():
     user32 = ctypes.windll.user32
     kernel32 = ctypes.windll.kernel32
 
+stop_flag = False
 cur_date = None
 cur_hour = None
 vm_id = 0
@@ -440,15 +442,58 @@ def del_timeout_task():
                 update_task_allot_impl_sub(task_group_id, task_id)
 
 
+def control_procs():
+    global stop_flag
+    sql = '''selelct vpnstatus from vpn_status where
+    serverid={0}'''.format(server_id)
+    res = dbutil.select_sql(sql)
+    if res:
+        status = res[0][0]
+    else:
+        status = 2
+
+    sql = '''select id,cur_task_id,task_group_id,terminal_type,user_type from vm_cur_task
+    where status in (1,2) and server_id=%d and vm_id=%d''' % (server_id, vm_id)
+    logger.info(sql)
+    procs = []
+    res = dbutil.select_sql(sql)
+    if res:
+        print res
+        for r in res:
+            id = r[0]
+            task_id = r[1]
+            task_group_id = r[2]
+            tty = r[3]
+            user_type = r[4]
+            script_name = get_script_name(task_id, task_group_id, user_type,
+                                          tty)
+            cmd_findstr = script_name + " -t %d" % (id)
+            logger.info("find proc cmdline:%s", cmd_findstr)
+            proc = find_proc_by_cmdline(cmd_findstr)
+            if proc:
+                procs.append(proc)
+    if status == 2:
+        for p in procs:
+            p.suspend()
+        stop_flag = True
+    elif status == 1:
+        if stop_flag:
+            for p in procs:
+                proc.resume()
+        stop_flag = False
+    else:
+        logger.error("unkown vpn status:%d", status)
+
+
 def get_firefox():
-    proc_list = []
-    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-        # print proc.info['name']
-        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
-            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-            # print proc.info['cmdline']
-            if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
-                    "firefox-esr --marionette") != -1:
+proc_list = []
+for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+# print proc.info['name']
+if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+# print proc.info['cmdline']
+if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
+        "firefox-esr --marionette") != -1:
                 print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
@@ -457,7 +502,7 @@ def get_firefox():
 def clean_all_firefox():
     plist = get_firefox()
     print plist
-    if len(plist) >2:
+    if len(plist) > 2:
         print "****************firefox too much********************"
         closeprocess("firefox")
         closeprocess("geckodriver")
@@ -505,6 +550,7 @@ def removePath(destinationPath, elapsed):
 def clean_tmp_profile(temp_dir, elapsed):
     removePath(temp_dir, elapsed)
 
+
 def clear_on_newday(temp_dir):
     global cur_date
     today = datetime.date.today()
@@ -548,13 +594,14 @@ def run_as_single():
 def main():
     run_as_single()
     init()
-    ip, area_name = "" , ""
+    ip, area_name = "", ""
     try:
         while True:
             try:
                 while True:
                     clean_all_firefox()
                     clean_tmp_profile(tempdir, 10)
+                    control_procs()
                     r = new_task_come()
                     if r is not None:
                         #if r['task_group_id'] !=0:
