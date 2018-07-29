@@ -104,19 +104,19 @@ def init():
         "-i",
         "--ip",
         dest="db_ip",
-        default="3.3.3.6",
+        default="192.168.199.203",
         help="mysql database server IP addrss, default is 192.168.1.235")
     parser.add_option(
         "-n",
         "--name",
         dest="db_name",
-        default="vm-test2",
+        default="vm_test2",
         help="database name, default is gamedb")
     parser.add_option(
         "-u",
         "--usrname",
         dest="username",
-        default="vm",
+        default="root",
         help="database login username, default is chinau")
     parser.add_option(
         "-p",
@@ -444,7 +444,7 @@ def del_timeout_task():
 
 def control_procs():
     global stop_flag
-    sql = '''selelct vpnstatus from vpn_status where
+    sql = '''select vpnstatus from vpn_status where
     serverid={0}'''.format(server_id)
     res = dbutil.select_sql(sql)
     if res:
@@ -486,14 +486,14 @@ def control_procs():
 
 
 def get_firefox():
-proc_list = []
-for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
-# print proc.info['name']
-if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
-proc.info["cmdline"] = " ".join(proc.info["cmdline"])
-# print proc.info['cmdline']
-if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
-        "firefox-esr --marionette") != -1:
+    proc_list = []
+    for proc in psutil.process_iter(attrs=['pid', 'name', 'cmdline']):
+    # print proc.info['name']
+        if proc.info["cmdline"] is not None and len(proc.info["cmdline"]) != 0:
+            proc.info["cmdline"] = " ".join(proc.info["cmdline"])
+            # print proc.info['cmdline']
+            if proc.info["cmdline"] is not None and proc.info["cmdline"].find(
+            "firefox-esr --marionette") != -1:
                 print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
@@ -604,17 +604,6 @@ def main():
                     control_procs()
                     r = new_task_come()
                     if r is not None:
-                        #if r['task_group_id'] !=0:
-                        #    print "dial before start task"
-                        #    if dialoff():
-                        #        record_vpn_ip_areaname(2, ip, area_name)
-                        #    ip, area_name = dial()
-                        #    if not ip:
-                        #        print "dial unsuccessful"
-                        #        time.sleep(5)
-                        #        continue
-                        #    else:
-                        #        record_vpn_ip_areaname(1, ip, area_name)
                         print "get task", r['task_id']
                         ret = runcmd(r['task_id'], r['id'], r['user_type'],
                                      r['task_group_id'], r['terminal_type'])

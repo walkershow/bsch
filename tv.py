@@ -14,38 +14,45 @@ import json
 
 def is_pptp_succ():
     message = os.popen('ip a|grep ppp').readlines()
+    print 'ip a|grep ppp'
     if message:
         inet = message[-1]
         if inet.find("inet")!=-1:
-            print 'succ'
+            print 'fin ip succ'
             return True 
-        return False
+    print 'not find anything'
+    return False
 
 def add_route():
     cmd = "route add default dev ppp0"
+    print cmd
     ret = os.system(cmd)
     return ret
 
 def dial():
-    cmd = "pon debo"
+    cmd = "pon debo2"
+    print cmd
     ret = os.system(cmd)
     if ret != 0:
         return None,None
-    for i in range(10):
+    for i in range(7):
         if is_pptp_succ():
+            add_route()
+            time.sleep(3)
             ip,area_name = get_dialup_ip()
-            if ip:
-                add_route()
             return ip,area_name
         time.sleep(5)
     return None,None
 
 def dialoff():
+    print "dial off..."
     ret = False
     if is_pptp_succ():
         cmd = "pkill pptp"
+        print cmd
         ret = os.system(cmd)
         ret = True
+    print "dial off end..."
     return True if ret else False
 
 def get_dialup_ip():
@@ -61,6 +68,9 @@ def get_dialup_ip():
 
 
 def main():
+    dialoff()
+    time.sleep(5)
+    print 'start to dial'
     ip, name = dial()
     print ip,name
     if ip:
