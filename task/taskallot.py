@@ -181,21 +181,35 @@ class TaskAllot(object):
             return res[0][0]
         return '1970-1-1 00:00:00'
 
-    def grouptype_last_succ_time(self, type_id):
-        sql = '''select a.succ_time from vm_cur_task a, vm_task_group_type b where 
+    def is_grouptype_running(self, type_id):
+        sql = '''select a.cur_task_id,a.succ_time from vm_cur_task a, vm_task_group_type b where 
         a.server_id={0} and a.task_group_id=b.task_group_id and
-        b.type_id={1}  order by a.start_time desc limit 5'''.format(self.server_id, type_id)
+        b.type_id={1}  and status in(-1,1)'''.format(self.server_id, type_id)
         self.logger.info(sql)
         res = dbutil.select_sql(sql)
-        print res
+        print res,len(res)
         count = len(res)
+        if count <= 0 :
+            return False
+        return True
+
+    def grouptype_last_succ_time(self, type_id):
+        sql = '''select a.cur_task_id,a.succ_time from vm_cur_task a, vm_task_group_type b where 
+        a.server_id={0} and a.task_group_id=b.task_group_id and
+        b.type_id={1}  order by a.succ_time desc limit 5'''.format(self.server_id, type_id)
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        print  "== == == == == == == == == =="
+        print res,len(res)
+        count = len(res)
+        task_id = res[0][0]
         if count <= 0 :
             return True, '1970-1-1 00:00:00'
         else:
-            succ_time = res[0][0]
-            if succ_time is None:
+            if self.is_grouptype_running(type_id):
                 return False,None
             else:
+                succ_time = res[0][1]
                 return True,succ_time
             
 
@@ -355,9 +369,11 @@ class TaskAllot(object):
                     AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
                     AND time_to_sec(a.end_time)
                     AND a.ran_times < a.allot_times
+                    AND b.ran_times < b.times
                     AND b.id > 0
                     AND c.task_group_id = a.id
                     and b.priority = %d 
+                    and d.user_type <99
                     AND f.server_id = %d ''' % (pri_id, self.server_id)
         # if type == 0:
             # sql = sql + " order by b.priority"
@@ -473,7 +489,7 @@ class TaskAllot(object):
             except Exception, e:
                 self.logger.error('exception on lock', exc_info=True)
                 self.logger.info("exception in lock, timeout")
-                self.selected_ids.append(gid)
+                # self.selected_ids.append(gid)
                 # time.sleep(20)
                 continue
         return task,gid
@@ -495,15 +511,36 @@ class TaskAllot(object):
                 task = self.allot_by_default(vm_id, 7)
             if not task:
                 task,gid = self.get_allot_task(vm_id,pri_id, False)
-            if not task:
-                task,gid = self.get_allot_task(vm_id,pri_id, True)
+            # if not task:
+                # task,gid = self.get_allot_task(vm_id,pri_id, True)
+            if task:
+                ret = True
+                self.add_ran_times(task.id, gid, task.rid)
             else:
+                pass
+        except TaskError, t:
+            raise TaskAllotError, "excute error:%s" % (t.message)
+            ret = False
+        if task:
+            return ret,task.id
+        else:
+            return ret, None
+
+    def allot_rest(self, vm_id, pri_id):
+        try:
+            task, gid, ret = None, 0, True
+            task,gid = self.get_allot_task(vm_id,pri_id, True)
+            if task:
                 ret = True
                 self.add_ran_times(task.id, gid, task.rid)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
-        return ret
+        if task:
+            return ret,task.id
+        else:
+            return ret, None
+
 
     def get_task_type(self, task_id):
         sql = '''select user_type,is_ad from vm_task where id=%d ''' % (

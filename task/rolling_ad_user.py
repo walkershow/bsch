@@ -28,23 +28,49 @@ class RollingADUser(object):
         self.db = db 
         self.logger = logger
 
+    def get_broken_vpn_servers(self):
+        sql = '''SELECT a.serverid from vpn_status a, vm_server_list b where UNIX_TIMESTAMP(a.update_time)>UNIX_TIMESTAMP(current_date)-3600*24
+                 and TIMESTAMPDIFF(minute,  a.update_time, CURRENT_TIMESTAMP())>30 and
+                a.serverid=b.id and b.status=1'''
+        res = dbutil.select_sql(sql)
+        timeout_array = []
+        if not res or len(res)<=0:
+            return []
+        for r in res:
+            print r
+            server_id = r[0]
+            timeout_array.append(server_id)
+        return timeout_array
+
     def get_useout_serverid(self):
         useout_dict = {}
         sql = '''select task_id,used_out_server_ids from vm_task_rolling7 where
-        update_time>current_date and used_out_server_ids is not null and
+        used_out_server_ids is not null and
         used_out_server_ids != '' order by task_id'''
         res = self.db.select_sql(sql)
         if not res or len(res)<=0:
             logger.info("%s sql get empty res"%(sql))
             return None
+        broken_servers= self.get_broken_vpn_servers()
+        bs_str = ','.join(map(str,broken_servers))
+        logger.info('broken server:%s', bs_str)
         for r in res:
             tid = r[0]
             sid_str = r[1]
             sids = [int(x) for x in sid_str.split(',')]
             sids2 = sorted(sids)
-            useout_dict[tid]=sids2
+            c = list(set(sids2+broken_servers))
+            useout_dict[tid]=c
             
         return useout_dict
+
+    def get_task_pri(self, task_id):
+        sql = '''select priority from vm_task_group where
+        task_id={0}'''.format(task_id)
+        res = self.db.select_sql(sql)
+        if not res or len(res)<=0:
+            return None
+        return res[0][0]
 
     def get_all_running_server(self):
         sql = '''select id from vm_server_list where status=1'''
@@ -61,6 +87,7 @@ class RollingADUser(object):
         sql='''select b.id from vm_task_group a, vm_server_list b where
         a.priority = b.run_as_single and b.status=1 and
         a.task_id={0}'''.format(task_id)
+        #print "running sql:",sql
         res = self.db.select_sql(sql)
         if not res or len(res)<=0:
            return None
@@ -83,9 +110,13 @@ class RollingADUser(object):
                 time.sleep(5)
                 continue
             for t,v in u_sids.items():
-                sids = self.get_task_running_server(t)
-                if  not sids:
+                pri = self.get_task_pri(t)
+                if pri>0:
+                    sids = self.get_task_running_server(t)
+                else:
                     sids = self.get_all_running_server()
+                print "t:",t,"v:",v
+                print "t:",t,"sids:", sids
                 if v == sids:
                     print 'same:',u_sids, sids
                     us_str = ','.join(map(str,v))
