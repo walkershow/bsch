@@ -30,7 +30,7 @@ class RollingADUser(object):
 
     def get_broken_vpn_servers(self):
         sql = '''SELECT a.serverid from vpn_status a, vm_server_list b where UNIX_TIMESTAMP(a.update_time)>UNIX_TIMESTAMP(current_date)-3600*24
-                 and TIMESTAMPDIFF(minute,  a.update_time, CURRENT_TIMESTAMP())>30 and
+                 and TIMESTAMPDIFF(minute,  a.update_time, CURRENT_TIMESTAMP())>10 and
                 a.serverid=b.id and b.status=1'''
         res = dbutil.select_sql(sql)
         timeout_array = []
@@ -103,29 +103,45 @@ class RollingADUser(object):
         if ret<0:
             raise Exception,"%s sql execute failed"%(sql)
 
+    def delete_timeout_rolling_log(self):
+        sql = '''delete from vm_task_rolling7 where
+        UNIX_TIMESTAMP(now())-UNIX_TIMESTAMP(update_time)>1800'''
+        self.logger.info(sql)
+        ret = self.db.execute_sql(sql)
+        if ret<0:
+            raise Exception,"%s sql execute failed"%(sql)
+
     def reset_task_rolling(self):
         while True:
-            u_sids = self.get_useout_serverid()
-            if not u_sids:
-                time.sleep(5)
+            try:
+                self.delete_timeout_rolling_log()
+                u_sids = self.get_useout_serverid()
+                if not u_sids:
+                    time.sleep(5)
+                    continue
+                for t,v in u_sids.items():
+                    pri = self.get_task_pri(t)
+                    if pri>0:
+                        sids = self.get_task_running_server(t)
+                    else:
+                        sids = self.get_all_running_server()
+                    print "t:",t,"v:",v
+                    print "t:",t,"sids:", sids
+                    # if len(v)>=20:
+                        # self.delete_rolling_log(t)
+                    # elif v == sids:
+                    if v == sids:
+                        print 'same:',u_sids, sids
+                        us_str = ','.join(map(str,v))
+                        s_str = ','.join(map(str,sids))
+                        logger.info("same task_id:%d userout:%s,\
+                                serverlist:%s",t,us_str,s_str)
+                        self.delete_rolling_log(t)
+                    time.sleep(1)
+                time.sleep(10)
+            except:
+                time.sleep(10)
                 continue
-            for t,v in u_sids.items():
-                pri = self.get_task_pri(t)
-                if pri>0:
-                    sids = self.get_task_running_server(t)
-                else:
-                    sids = self.get_all_running_server()
-                print "t:",t,"v:",v
-                print "t:",t,"sids:", sids
-                if v == sids:
-                    print 'same:',u_sids, sids
-                    us_str = ','.join(map(str,v))
-                    s_str = ','.join(map(str,sids))
-                    logger.info("same task_id:%d userout:%s,\
-                            serverlist:%s",t,us_str,s_str)
-                    self.delete_rolling_log(t)
-                time.sleep(1)
-            time.sleep(10)
 
 
 def main():

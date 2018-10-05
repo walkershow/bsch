@@ -63,7 +63,6 @@ class TaskProfile(object):
         start = res[0][0]
         end = res[0][1]
         day = random.randint(start, end)
-        print "days:", day
         return day
 
     #need task_type,no!!!!
@@ -121,10 +120,8 @@ class TaskProfile(object):
                                                 user_type, day, area)
         used_profiles = self.get_used_profiles(vm_id, user_type, terminal_type,
                 task_group_id)
-        # print all_profiles, used_profiles
         usable_profiles = list(
             set(all_profiles).difference(set(used_profiles)))
-        # print usable_profiles
         profile_id = None
         if usable_profiles:
             profile_id = random.choice(usable_profiles)
@@ -132,12 +129,10 @@ class TaskProfile(object):
 
     def gen_rand_standby_time(self, standby_time):
         standby_time_arr = standby_time.split(",")
-        print "time_arr", standby_time_arr
         stimes = map(int, standby_time_arr)
         if len(stimes)==1:
             stimes.append(stimes[0])
         randtime = random.randint(stimes[0],stimes[1])
-        print "rantime",randtime
         return randtime
 
     def set_cur_task_profile(self, vm_id, task_id, task_group_id, day, area):
@@ -147,13 +142,10 @@ class TaskProfile(object):
         # (task_type, user_type, terminal_type,standby_time, timeout, copy_cookie,
         # click_mode, inter_time) = self.get_task_type(task_id)
         r = self.get_task_type(task_id)
-        print r['standby_time'],r['inter_time']
         randtime = self.gen_rand_standby_time(r['standby_time'])
-        print "rantime",randtime
         self.logger.info(
             "task id:%d task_type:%d,user_type:%d, terminal_type:%d", task_id,
             r['type'], r['user_type'], r['terminal_type'])
-        # print "set_cur_task_profile:",task_type, terminal_typ
         if task_group_id==0:
             profile_id = self.zt.get_usable_profiles(vm_id, r['user_type'],
                                                      r['terminal_type'], area)
@@ -164,7 +156,6 @@ class TaskProfile(object):
             profile_id = self.get_task_usable_profiles(vm_id, r['user_type'],
                                                        r['terminal_type'], day,
                                                        task_group_id, area)
-        # print profile_id
         if not profile_id:
             self.logger.warn("vm_id:%d task id:%d no profile to use!!!", vm_id,
                              task_id)
@@ -193,7 +184,6 @@ class TaskProfile(object):
         self.logger.info(
             "allot profile succ info:server_id:%d,vm_id:%d,task_id:%d,task_type:%d,profile_id:%d",
             self.server_id, vm_id, task_id, r['type'], profile_id)
-        # print self.server_id,vm_id, task_id, task_type, profile_id
         if task_id != 0:
             self.log_task_profile_latest(vm_id, task_group_id, task_id, r['type'], profile_id,
                                          oprcode, -1, r['user_type'],
@@ -209,7 +199,6 @@ class TaskProfile(object):
     def log_task_profile_latest(self, vm_id, task_group_id,task_id, task_type, profile_id,
                                 oprcode, status, user_type, terminal_type):
         re_enable_hours = self.get_reenable_day(task_type)
-        print self.server_id, vm_id, profile_id, task_type, task_id, re_enable_hours
         sql = "insert into \
         vm_task_profile_latest(server_id,vm_id,profile_id,task_type,task_group_id,task_id,start_time,re_enable_hours, oprcode, status, user_type,terminal_type)"\
         " values(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d, %d, %d, %d, %d) on duplicate key update  task_type=%d,"\
