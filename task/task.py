@@ -37,7 +37,7 @@ class Task(object):
         self.__initTask()
 
     def __initTask(self):
-        sql = "select id,task_name,script_file,gen_type from vm_task where id=%d"%(self.id)
+        sql = "select id,task_name,script_file,0 from vm_task where id=%d"%(self.id)
         res = self.db.select_sql(sql)
         # logger.info("init task data:%d",ret)
         if not res:

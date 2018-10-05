@@ -35,6 +35,7 @@ from task.rolling_user import UserAllot
 from task.user_ec import UserAllot_EC
 from task.user_rest import UserAllot as UserAllot_Rest
 from task.user_rolling7 import UserAllot as UserAllot7
+from task.user_reg import UserAllot as UserAllot_Reg
 from logbytask.logtask import LogTask
 from manvm import CManVM
 from random import choice
@@ -192,8 +193,18 @@ def can_take_task():
             return True
     return False
 
+def is_task_running(vm_id):
+    sql = '''select user_type from vm_cur_task where server_id={0}
+    and vm_id={1} and status in(-1,1) limit 1'''.format(g_serverid,vm_id)
+    res = dbutil.select_sql(sql)
+    if not res or len(res)<1:
+        return False
+    return True
+    
+
 def vm_business(vm_id):
-    sql = "select a.vm_id from vm_cur_task a where a.server_id=%d and a.vm_id=%d and a.status in(1,-1,-2) "
+    sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
+    a.user_type!=99 and a.vm_id=%d and a.status in(1,-1,-2) '''
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     sqltmp = sql % (g_serverid, vm_id)
     # print sqltmp
@@ -208,20 +219,26 @@ def vm_business(vm_id):
             count = res[0][0]
         # logger.warn("running task vm:%d,count:%d", vm_id, count)
         if count < g_pb:
-            if not can_take_task():
-                logger.warn(
-                    utils.auto_encoding("vm:%d\
-                            没有可运行任务名额,只能跑零跑任务"), vm_id)
+            # if not can_take_task():
+                # logger.warn(
+                    # utils.auto_encoding("vm:%d\
+                            # 没有可运行任务名额,只能跑零跑任务"), vm_id)
             # logger.error(
                 # utils.auto_encoding("==========进入任务分配=========="))
             print "the pri-id:", g_rcv
-            ret = g_taskallot.allot_by_priority(
+            ret,task_id = g_taskallot.allot_by_priority(
                 vm_id,g_rcv )
-            print "get task", ret
+            print "get task:", task_id
             if not ret:
                 logger.warn(
-                    utils.auto_encoding("虚拟机:%d 没有non zero任务可运行"),
-                    vm_id)
+                    utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
+                        分配显示任务'''), vm_id)
+                
+                if not is_task_running(vm_id):
+                    ret,task_id = g_taskallot.allot_rest(
+                        vm_id,g_rcv )
+                    print "get rest task:", task_id
+                
         else:
             logger.warn(
                 utils.auto_encoding('''虚拟机:%d
@@ -251,8 +268,6 @@ def main_loop():
                 vm_id = choice(vm_ids)
                 vm_business(vm_id)
             time.sleep(3)
-
-
         except:
             logger.error('exception on main_loop', exc_info=True)
             time.sleep(3)
@@ -385,8 +400,9 @@ def init():
     g_userec = UserAllot_EC(g_serverid, g_pc, dbutil, logger)
     g_userrest = UserAllot_Rest(g_serverid, g_pc, dbutil, logger)
     g_user7= UserAllot7(g_serverid, g_pc, dbutil, logger)
+    g_user_reg= UserAllot_Reg(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
-            g_userec, g_user7,g_userrest, dbutil, logger)
+            g_userec, g_user7,g_userrest,g_user_reg, dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)
@@ -410,35 +426,18 @@ def test():
     dbutil.select_sql('''select * from vm_priv where id=1 for
     update''', False)
     dbutil.execute_sql("update vm_priv set priv=0 where id=1", False)
-
-
     # dbutil.commit()
+
 def main():
     try:
         init()
-        # if g_reset == 1:
-            # logger.info("reseting !!!")
-            # reset()
-        # while True:
-        # test()
-        # print "hihihi"
-        # time.sleep(5)
-        # t2 = threading.Thread(target=pause_resume_vm, name="pause_thread")
-        # t2.start()
-        # g_manvm.process()
         print "to main loop"
         main_loop()
     except (KeyboardInterrupt, SystemExit):
         print("exit system,start to shut down all vm...")
         time.sleep(10)
         exit(0)
-        # vms.shutdown_allvm(g_serverid)
-        # logger.info("shutdown all vm done")
 
 
 if __name__ == "__main__":
     main()
-    # init()
-    # g_vpn_db.create_connection()
-    # print is_ip_valid('61.145.245.183')
-    # print is_ip_valid('115.225.153.71')

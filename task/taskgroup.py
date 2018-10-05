@@ -85,6 +85,7 @@ class TaskGroup(object):
             AND b.ran_times < b.times
             AND b.id > 0
             ORDER BY rand()'''.format(task_group_id)
+            print (sql)
             res = self.db.select_sql(sql)
             task = {}
             self.tasks = []
@@ -164,17 +165,17 @@ class TaskGroup(object):
         else:
             sql = sql + " and user_type>0"
             sql = sql % (server_id, vm_id)
-
-        # logger.info(sql)
+        print sql
+        #logger.info(sql)
         res                     = db.select_sql(sql)
         dtask                   = []
         task_id_list            = []
         task_id_list_pc_baidu   = [10000]
         task_id_list_mobi_baidu = [10006]
         task_id_list_pc         = [None,10001, 10002, 10003, 10004, 10005,
-        10012, 10012]
+        10012, 10012,10013,10014]
         task_id_list_mobi       = [None,10007, 10008, 10009, 10010, 10011, 
-        None, None]
+        None, None, None, None]
         if res:
             for r in res:
                 id  = r[0]

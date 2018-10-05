@@ -37,7 +37,7 @@ class TaskAllot(object):
     logger = None
 
     def __init__(self, want_init, server_id, pc, user, user_ec, user7,
-            user_rest, db, logger):
+            user_rest,user_reg, db, logger):
         self.db = db
         self.cur_date = None
         self.want_init = want_init
@@ -48,6 +48,7 @@ class TaskAllot(object):
         self.user_ec = user_ec
         self.user7 = user7
         self.user_rest = user_rest
+        self.user_reg = user_reg
         print self.user, self.user_rest
         self.logger = logger
         self.task_group = TaskGroup(db)
@@ -202,10 +203,10 @@ class TaskAllot(object):
         print  "== == == == == == == == == =="
         print res,len(res)
         count = len(res)
-        task_id = res[0][0]
         if count <= 0 :
             return True, '1970-1-1 00:00:00'
         else:
+            task_id = res[0][0]
             if self.is_grouptype_running(type_id):
                 return False,None
             else:
@@ -373,13 +374,16 @@ class TaskAllot(object):
                     AND b.id > 0
                     AND c.task_group_id = a.id
                     and b.priority = %d 
-                    and d.user_type <99
+                    and d.user_type !=99
                     AND f.server_id = %d ''' % (pri_id, self.server_id)
         # if type == 0:
             # sql = sql + " order by b.priority"
         self.logger.info(sql)
+        print "sql",sql
         res = self.db.select_sql(sql)
+        print "======================="
         print "get res in pri", res
+        print "======================="
         ids = set()
         rid_set = self.get_band_run_groupids()
         if pri_id > 0:
@@ -445,14 +449,21 @@ class TaskAllot(object):
         ret = False
         self.reset_when_newday()
         if not brest:
-            self.get_candidate_gid(vm_id)
             if pri_id > 0:
+                # print ("pri_id>0", self.selected_ids)
+                # print ("pri_id>0 22222", self.selected_ids)
+                self.get_candidate_gid(vm_id)
                 self.get_candidate_gid(vm_id, pri_id)
+            else:
+                if not self.selected_ids:
+                    self.get_candidate_gid(vm_id)
         else:
-            self.get_candidate_gid2(vm_id)
+            if not self.selected_ids:
+                self.get_candidate_gid2(vm_id)
 
         # self.get_candidate_gid2(vm_id)
         while self.selected_ids:
+            band_str = ",".join(str(s) for s in self.selected_ids)
             ret = False
             gid = self.selected_ids.pop()
             self.logger.info(
@@ -567,6 +578,8 @@ class TaskAllot(object):
             ret = self.user_ec.allot_user(vm_id, task_group_id, task.id)
         elif uty == 99:
             ret = self.user_rest.allot_user(vm_id, task_group_id, task.id)
+        elif uty >= 10000:
+            ret = self.user_reg.allot_user(vm_id, task_group_id, task.id, area)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id, area)
         if not ret:
@@ -632,10 +645,11 @@ def getTask():
     import random
     from rolling_user import UserAllot
     from user_rest import UserAllot as UserRest
+    from user_reg import UserAllot as UserReg
     dbutil.db_host = "192.168.1.21"
     # dbutil.db_host = "3.3.3.6"
-    # dbutil.db_name = "vm3"
-    dbutil.db_name = "vm-test"
+    dbutil.db_name = "vm3"
+    #dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"
@@ -648,13 +662,16 @@ def getTask():
     pc = ParallelControl(s, dbutil, logger)
     user = UserAllot(s, pc, dbutil, logger)
     urest = UserRest(s, pc, dbutil, logger)
-    t = TaskAllot(0, s, pc, user, None,None,urest, dbutil, logger)
+    ureg= UserReg(s, pc, dbutil, logger)
+    t = TaskAllot(0, s, pc, user, None,None,urest,ureg, dbutil, logger)
 
-    # t.allot_by_default(2, 0)
+    t.allot_by_default(1, 1)
     # t.allot_by_default(2, 7)
     # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
-    ret = t.allot_by_priority(1, 0)
+    # while True:
+        # ret = t.allot_by_priority(1, 0)
+        # time.sleep(3)
     # while True:
         # ret = t.allot_by_priority(5, 115)
         # time.sleep(3)
@@ -681,9 +698,9 @@ if __name__ == '__main__':
     # dbutil.db_host = "3.3.3.6"
     # dbutil.db_name = "vm3"
     dbutil.db_name = "vm-test"
-    dbutil.db_user = "dba"
+    dbutil.db_user = "vm"
     dbutil.db_port = 3306
-    dbutil.db_pwd = "chinaU#2720"
+    dbutil.db_pwd = "123456"
     logger = get_default_logger()
     global server_id
     server_id =int(sys.argv[1])
