@@ -42,16 +42,17 @@ class TaskAllot(object):
         self.cur_date = None
         self.want_init = want_init
         self.server_id = server_id
-        self.selected_ids = []
         self.pc = pc
         self.user = user
         self.user_ec = user_ec
         self.user7 = user7
         self.user_rest = user_rest
         self.user_reg = user_reg
-        print self.user, self.user_rest
         self.logger = logger
         self.task_group = TaskGroup(db)
+        self.ranking_dict = {}
+        self.selected_ids = []
+        self.priority_ids = []
         # self.lock = utils.Lock("/tmp/lock-sched.lock")
 
     def log_task_id(self, id, task_id):
@@ -343,14 +344,65 @@ class TaskAllot(object):
                                  task_group_id)
         return False,None
 
+    def get_rankings(self, vm_id):
+        sql = "select distinct ranking from vm_task_group where ran_times<times"
+        self.logger.info(sql)
+        print "sql",sql
+        res = self.db.select_sql(sql)
+        rankings = []
+        for r in res:
+            rankings.append(r[0])
+        return rankings
+
+    def get_ranking_gid(self, vm_id, pri_id=0):
+        rankings = self.get_ranking(vm_id)
+        for ranking in rankings:
+            ids = self.get_candidate_gid(vm_id, pri_id, ranking)
+            
+    def get_priority_gid(self):
+        sql = '''SELECT
+                        distinct a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.ran_times < b.times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.ranking > 0
+                    and d.user_type !=99
+                    AND f.server_id = %d order by ranking desc ''' % (self.server_id)
+        self.logger.info(sql)
+        print "sql",sql
+        res = self.db.select_sql(sql)
+        print "======================="
+        print "get res in pri ranking", res
+        print "======================="
+        ids = set()
+        rid_set = self.get_band_run_groupids()
+        for r in res:
+            ids.add(r[0])
+        band_str = ",".join(str(s) for s in rid_set)
+        self.logger.info("band task_group_id:%s", band_str)
+    
+        self.priority_ids= list(set(ids) - rid_set)
+        return self.priority_ids
 
 
-    def get_candidate_gid(self, vm_id, pri_id=0):
-        # type_str = ">"
-        # if type == 0:
-            # type_str = ">"
-        # else:
-            # type_str = "="
+    def get_candidate_gid(self, vm_id, pri_id=0, ranking = 0):
         sql = '''SELECT
                         distinct a.id
                     FROM
@@ -374,10 +426,9 @@ class TaskAllot(object):
                     AND b.id > 0
                     AND c.task_group_id = a.id
                     and b.priority = %d 
+                    and b.ranking = 0
                     and d.user_type !=99
                     AND f.server_id = %d ''' % (pri_id, self.server_id)
-        # if type == 0:
-            # sql = sql + " order by b.priority"
         self.logger.info(sql)
         print "sql",sql
         res = self.db.select_sql(sql)
@@ -395,8 +446,9 @@ class TaskAllot(object):
             ids.add(r[0])
         band_str = ",".join(str(s) for s in rid_set)
         self.logger.info("band task_group_id:%s", band_str)
-
+    
         self.selected_ids = list(set(ids) - rid_set)
+        return self.selected_ids
 
     def get_candidate_gid2(self, vm_id):
         sql = '''SELECT
@@ -444,14 +496,62 @@ class TaskAllot(object):
             return None
         return task
 
+    def get_ranking_task(self, vm_id):
+        task,gid = None,None
+        ret = False
+        self.reset_when_newday()
+        if not self.priority_ids:
+            self.get_priority_gid()
+
+        while self.priority_ids:
+            band_str = ",".join(str(s) for s in self.priority_ids)
+            ret = False
+            gid = self.priority_ids.pop()
+            self.logger.info(
+                "====================handle gid:%d====================",
+                gid)
+            try:
+                with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
+                    # 放在里面否则可能出现多个任务不按间隔时间跑
+                    rid_set = self.get_band_run_groupids()
+                    print "band groupid:", rid_set
+                    if gid in rid_set:
+                        self.logger.error("gid:%d is banded", gid)
+                        continue
+                    if not self.wait_interval(gid):
+                        if not self.can_allot_rest(gid):
+                            self.logger.info("gid:%d should wait 5 mins",
+                                             gid)
+                            continue
+                    ret, area = self.right_to_allot(gid)
+                    if ret:
+                        self.logger.info("get valid gid:%d", gid)
+                    else:
+                        # self.logger.warn("wait for redial:%d", gid)
+                        continue
+
+                    task = self.handle_taskgroup(gid, vm_id, area)
+                    if task:
+                        self.logger.info("get the gid:%d  task:%d", gid,task.id)
+                        ret = True
+                        # self.add_ran_times(task.id, gid, task.rid)
+                        break
+                    else:
+                        continue
+            except Exception, e:
+                self.logger.error('exception on lock', exc_info=True)
+                self.logger.info("exception in lock, timeout")
+                self.priority_ids.append(gid)
+                time.sleep(2)
+                continue
+        return task,gid
+
     def get_allot_task(self, vm_id, pri_id, brest):
         task,gid = None,None
         ret = False
         self.reset_when_newday()
         if not brest:
             if pri_id > 0:
-                # print ("pri_id>0", self.selected_ids)
-                # print ("pri_id>0 22222", self.selected_ids)
                 self.get_candidate_gid(vm_id)
                 self.get_candidate_gid(vm_id, pri_id)
             else:
@@ -461,7 +561,6 @@ class TaskAllot(object):
             if not self.selected_ids:
                 self.get_candidate_gid2(vm_id)
 
-        # self.get_candidate_gid2(vm_id)
         while self.selected_ids:
             band_str = ",".join(str(s) for s in self.selected_ids)
             ret = False
@@ -520,6 +619,9 @@ class TaskAllot(object):
             if not task:
                 ret = False
                 task = self.allot_by_default(vm_id, 7)
+            if not task:
+                ret = False
+                task,gid = self.get_ranking_task(vm_id)
             if not task:
                 task,gid = self.get_allot_task(vm_id,pri_id, False)
             # if not task:
@@ -648,8 +750,8 @@ def getTask():
     from user_reg import UserAllot as UserReg
     dbutil.db_host = "192.168.1.21"
     # dbutil.db_host = "3.3.3.6"
-    dbutil.db_name = "vm3"
-    #dbutil.db_name = "vm-test"
+    #dbutil.db_name = "vm3"
+    dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
     dbutil.db_pwd = "chinaU#2720"
@@ -665,13 +767,15 @@ def getTask():
     ureg= UserReg(s, pc, dbutil, logger)
     t = TaskAllot(0, s, pc, user, None,None,urest,ureg, dbutil, logger)
 
-    t.allot_by_default(1, 1)
+    #t.allot_by_default(1, 1)
     # t.allot_by_default(2, 7)
     # t.allot_by_default(2, 1)
     #t.allot_by_nine(1)
-    # while True:
-        # ret = t.allot_by_priority(1, 0)
-        # time.sleep(3)
+    #ret,task_id = t.allot_by_priority(1, 0)
+    while True:
+        ret = t.allot_by_priority(1, 0)
+        time.sleep(3)
+    #单机跑测试
     # while True:
         # ret = t.allot_by_priority(5, 115)
         # time.sleep(3)
