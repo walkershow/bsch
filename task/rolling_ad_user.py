@@ -30,7 +30,7 @@ class RollingADUser(object):
 
     def get_broken_vpn_servers(self):
         sql = '''SELECT a.serverid from vpn_status a, vm_server_list b where UNIX_TIMESTAMP(a.update_time)>UNIX_TIMESTAMP(current_date)-3600*24
-                 and TIMESTAMPDIFF(minute,  a.update_time, CURRENT_TIMESTAMP())>10 and
+                 and TIMESTAMPDIFF(minute,  a.update_time, CURRENT_TIMESTAMP())>12 and
                 a.serverid=b.id and b.status=1'''
         res = dbutil.select_sql(sql)
         timeout_array = []
@@ -61,7 +61,7 @@ class RollingADUser(object):
             sids2 = sorted(sids)
             c = list(set(sids2+broken_servers))
             useout_dict[tid]=c
-            
+        print("useout_dict", useout_dict)
         return useout_dict
 
     def get_task_pri(self, task_id):
