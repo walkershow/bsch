@@ -5,12 +5,6 @@
 # Date              : 15.05.2018 17:46:1526377570
 # Last Modified Date: 22.05.2018 17:21:1526980881
 # Last Modified By  : coldplay <coldplay_gz@sina.cn>
-"""
-@Author: coldplay
-@Date: 2017-03-20 10:56:47
-@Last Modified by: coldplay
-@Last Modified time: 2017-03-20 11:21:21
-"""
 import sys
 import ConfigParser
 import datetime
@@ -31,14 +25,18 @@ import vm_utils
 import utils
 import task.parallel
 from task.parallel import ParallelControl
-from task.rolling_user import UserAllot
+#from task.rolling_user import UserAllot
+from task.user import UserAllot
 from task.user_ec import UserAllot_EC
 from task.user_rest import UserAllot as UserAllot_Rest
 from task.user_rolling7 import UserAllot as UserAllot7
 from task.user_reg import UserAllot as UserAllot_Reg
+from task.user_iqy import UserAllot as UserAllot_IQY
+from task.user_iqyall import UserAllot as UserAllot_IQYALL
+from task.user_iqyatv import UserAllot as UserAllot_IQYATV
 from logbytask.logtask import LogTask
 from manvm import CManVM
-from random import choice
+from random import choice,shuffle
 global g_vManager_path
 global g_current_dir
 global g_reset
@@ -53,26 +51,21 @@ g_taskallot          = None
 g_logtask            = None
 g_task_profile       = None
 g_cur_date           = datetime.date.today()
-g_last_shutdown_time = None
-g_start_idx          = 0
-g_vpn_db             = None
 vm_names             = []
 vm_ids               = []
 g_reset_waittime     = 120
-g_pb                 = 4
+g_pb                 = 1
 g_pc                 = None
 exit_flag            = False
 g_user               = None
 g_userrest           = None
 g_userec             = None
 g_user7              = None
-g_manvm              = None
 
 
 def get_cur_hour():
     now = datetime.datetime.now()
     return now.hour
-
 
 def is_new_day():
     global g_cur_date
@@ -81,130 +74,528 @@ def is_new_day():
         return False
     return True
 
-
-def log_allot_status(server_id, task_id):
-    sql = "insert into vm_server_allot_status (server_id, task_id, ran_times,create_time) values(%d,%d,1,CURRENT_DATE) ON DUPLICATE KEY UPDATE \
-            ran_times = ran_times+1" % (server_id, task_id)
-    ret = dbutil.execute_sql(sql)
-    if ret < 0:
-        raise Exception, "%s excute error;ret:%d" % (sql, ret)
-
-
-def get_shutdown_time():
-    """获取关机时间点
-    """
-    sql = "select `value` from vm_sys_dict where `key`='shutdown_time'"
-    # logger.info(sql)
+def is_run_as_single(area):
+    sql = '''select ifnull(single_gid,'') from vpn_status where
+    area=%s'''%(area)
+    print sql
     res = dbutil.select_sql(sql)
-    # print "is_exp_vm:", res
-    if res is None or len(res) < 1:
-        return None
-    time_list = res[0][0].split(',')
-    return time_list
+    print "single", res
+    print len(res)
+    print res[0]
+    if not res or len(res)<=0:
+        return 0
+    single_gid = res[0][0]
+    print 'sgid', single_gid
+    return single_gid
 
-
-def is_use_cache():
-    sql = "select `value` from vm_sys_dict where `key`='use_cache'"
+def get_dialup_arealist():
+    sql = '''select area,update_time from vpn_status where vpnstatus=1 and area!='' order by rand()'''
+    logger.info(sql)
     res = dbutil.select_sql(sql)
     if not res:
+        return None
+    area_dict= {}
+    for r in res:
+        #print r[1]
+        if r[1] is None :
+            continue
+        area_dict.update({r[0]:r[1]})
+    #print area_dict
+    return area_dict
+
+def is_valid_area(area):
+    '''当前改区域拨号后非0跑<4个，可以继续分配任务'''
+    area = str(area)
+    areadict= get_dialup_arealist()
+    
+    print areadict.keys()
+    if not areadict:
+        print "not area dict"
+        return False 
+    print str(area)
+    if str(area) not in areadict.keys():
+        print "are is here"
         return False
-    uc = int(res[0][0])
-    if uc == 1:
+    sql = "select count(*) from vm_cur_task where area={0} and task_group_id!=0 \
+     and start_time>'{1}' and (status in(-1,1,2) or succ_time is not null)"
+    # sql = "select count(*) from vm_cur_task where area={0} and task_group_id!=0 \
+    # and start_time>{1} and (status in(-1,1,2) or succ_time is not null)"
+    k = area
+    v = areadict[k]
+    sql_tmp = sql.format(k,v)
+    logger.info(sql_tmp)
+    res = dbutil.select_sql(sql_tmp)
+    if not res:
+        logger.info("area:%s,可以跑任务", k)
+        return True
+    logger.info("area:%s, task num:%d", k ,res[0][0])
+    if res[0][0]<4:
+        logger.info("area:%s,任务数:%d 可以跑任务", k,res[0][0])
         return True
     return False
 
-def is_run_as_single():
-    sql = '''select run_as_single from vm_server_list where
-    id=%d'''%(g_serverid)
-    res = dbutil.select_sql(sql)
-    if not res:
-        return 0
-    is_single = int(res[0][0])
-    return is_single
 
-    
-def reset_vms_oneday():
-    global g_last_shutdown_time
-    tlist = get_shutdown_time()
-    if not tlist:
-        logger.info("reset time list is empty")
-        return
-    print tlist
-    cur_hour = get_cur_hour()
-    print "cur_hour", cur_hour
-    if str(cur_hour) in tlist and cur_hour != g_last_shutdown_time:
-        g_last_shutdown_time = cur_hour
-        logger.info("time:%d", cur_hour)
-        logger.info("=======start to reset all vm one day============")
-        vms.resume_allvm(g_serverid)
-        vms.reset_allvm(g_serverid)
-        logger.info("reset complete, sleep %s", g_reset_waittime)
-        time.sleep(g_reset_waittime)
-        logger.info("=======ent to reset all vm one day============")
-
-
-def shutdown_by_flag():
-    sql = "select 1 from vm_server_poweroff where server_id=%d and poweroff=1" % (
-        g_serverid)
-    res = dbutil.select_sql(sql)
-    if res is None or len(res) < 1:
-        return False
-    logger.info("=======start to shutdown all vm ============")
-    vms.resume_allvm(g_serverid)
-    vms.shutdown_allvm(g_serverid)
-    while True:
-        time.sleep(30)
-        running = False
-        for vm in vm_utils.list_allrunningvms():
-            running = True
-            break
-        if running:
-            time.sleep(10)
-            vms.resume_allvm(g_serverid)
-            vms.shutdown_allvm(g_serverid)
-            continue
+def get_valid_area():
+    '''当前改区域拨号后非0跑<4个，可以继续分配任务'''
+    areadict= get_dialup_arealist()
+    if not areadict:
+        return -1
+    area_str = ','.join(areadict.keys())
+    logger.info("获取有效地区列表:%s", area_str)
+    area_list = areadict.keys()
+    shuffle(area_list)
+    logger.info("打乱有效地区列表:%s", area_list)
+    sql = "select count(*) from vm_cur_task where area={0} and task_group_id!=0 \
+     and start_time>'{1}' and (status in(-1,1,2) or succ_time is not null)"
+    # sql = "select count(*) from vm_cur_task where area={0} and task_group_id!=0 \
+    # and start_time>{1} and (status in(-1,1,2) or succ_time is not null)"
+    for area in area_list:
+        k = area
+        v = areadict[k]
+    #for k,v in areadict.items():
+        sql_tmp = sql.format(k,v)
+        logger.info(sql_tmp)
+        res = dbutil.select_sql(sql_tmp)
+        if not res:
+            logger.info("area:%s,可以跑任务", k)
+            return k
+        logger.info("area:%s, task num:%d", k ,res[0][0])
+        if res[0][0]<4:
+            logger.info("area:%s,任务数:%d 可以跑任务", k,res[0][0])
+            return k
         else:
-            break
+            continue
+    return -1
 
-    sql = "update vm_server_poweroff set poweroff=0 where server_id=%d" % (
-        g_serverid)
-    logger.info("sql:%s", sql)
-    ret = dbutil.execute_sql(sql)
-    if ret <= 0:
-        logger.info("sql:%s======>> exceute ret:%d", sql, ret)
-    logger.info("=======shutdown all vm finished============")
-    return True
-
-
-def can_take_task():
-    # sql = "select count(1) from vm_task_runtimes_config where "\
-        # " date(used_out_time) != current_date and users_used_amount<%d" % (
-                # times_one_day)
-    sql = ''' select 1 from vm_task_runtimes_config a, vm_runtimes_type b,
-    taskgroup_runtimes_map c where  
-    a.task_group_id =c.task_group_id and b.id=c.runtimes_type_id    and                                                                                                                                           
-             date(a.used_out_time) != current_date or
-    a.users_used_amount<b.times_one_day limit 1'''
-    logger.info(sql)
-    res = dbutil.select_sql(sql)
-    if res:
-        count = res[0][0]
-        if count:
-            return True
+def is_valid_zero_area(area):
+    '''当前改区域拨号后非0跑<4个，可以继续分配任务'''
+    return False
+    areadict= get_dialup_arealist()
+    if not areadict:
+        return False 
+    if area not in areadict.keys():
+        return False
+    sql = "select count(*) from vm_cur_task where area={0}  \
+    and start_time>'{1}' and status in(-1,1,2) "
+    k = area
+    v = areadict[k]
+    sql_tmp = sql.format(k,v)
+    logger.info(sql_tmp)
+    res = dbutil.select_sql(sql_tmp)
+    if not res:
+        logger.info("0area:%s,可以零跑任务", k)
+        return True
+    logger.info("0area:%s, task num:%d", k ,res[0][0])
+    if res[0][0]<4:
+        logger.info("0area:%s,任务数:%d 可以零跑任务", k,res[0][0])
+        return True
     return False
 
-def is_task_running(vm_id):
-    sql = '''select user_type from vm_cur_task where server_id={0}
-    and vm_id={1} and status in(-1,1) limit 1'''.format(g_serverid,vm_id)
+def get_valid_zero_area():
+    return -1
+    '''当前改区域拨号后非0跑<4个，可以继续分配任务'''
+    areadict= get_dialup_arealist()
+    if not areadict:
+        return -1
+    area_str = ','.join(areadict.keys())
+    logger.info("获取有效地区列表:%s", area_str)
+    sql = "select count(*) from vm_cur_task where area={0}  \
+    and start_time>'{1}' and status in(-1,1,2) "
+    for k,v in areadict.items():
+        sql_tmp = sql.format(k,v)
+        print sql_tmp
+        logger.info(sql_tmp)
+        res = dbutil.select_sql(sql_tmp)
+        print 'res', res
+        print 'res[0]', res[0]
+        if not res:
+            logger.info("0area:%s,可以跑任务", k)
+            return k
+        logger.info("0area:%s, task num:%d", k ,res[0][0])
+        if res[0][0]<4:
+            logger.info("0area:%s,任务数:%d 可以跑任务", k,res[0][0])
+            return k
+        else:
+            return -1
+    return -1
+
+def get_rand_area():
+    area_list = get_valid_arealist()
+    if not area_list:
+        return None
+    area = choice(area_list)
+    return area
+
+def can_iqy_run():
+    #return False
+    sql = '''SELECT
+                    distinct a.id
+                FROM
+                    vm_task_group b,
+                    vm_task_allot_impl a,
+                    vm_allot_task_by_servergroup c,
+                    vm_task d,
+                    vm_server_group f
+                WHERE
+                    b.id = a.id
+                AND b.task_id = a.task_id
+                AND d.id = b.task_id
+                AND d. STATUS = 1
+                AND f.id = c.server_group_id
+                and f.status =1
+                AND c.task_group_id = b.id
+                AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                AND time_to_sec(a.end_time)
+                AND a.ran_times < a.allot_times
+                AND b.ran_times < b.times
+                AND b.id > 0
+                AND c.task_group_id = a.id
+                and b.ranking > 0
+                and b.priority = 0
+                and b.id in(50277)
+                AND f.server_id = %d order by ranking desc ''' % (g_serverid)
+    logger.info(sql)
+    #print "sql",sql
     res = dbutil.select_sql(sql)
-    if not res or len(res)<1:
-        return False
-    return True
+    print "======================="
+    print "get res in iqy pri ranking", res
+    print "======================="
+    ids = set()
+    for r in res:
+        ids.add(r[0])
+    if ids:
+        return True
+    return False
+
+def can_iqyatv_run():
+    #return False
+    sql = '''SELECT
+                    distinct a.id
+                FROM
+                    vm_task_group b,
+                    vm_task_allot_impl a,
+                    vm_allot_task_by_servergroup c,
+                    vm_task d,
+                    vm_server_group f
+                WHERE
+                    b.id = a.id
+                AND b.task_id = a.task_id
+                AND d.id = b.task_id
+                AND d. STATUS = 1
+                AND f.id = c.server_group_id
+                and f.status =1
+                AND c.task_group_id = b.id
+                AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                AND time_to_sec(a.end_time)
+                AND a.ran_times < a.allot_times
+                AND b.ran_times < b.times
+                AND b.id > 0
+                AND c.task_group_id = a.id
+                and b.ranking > 0
+                and b.priority = 0
+                and b.id in(50278)
+                AND f.server_id = %d order by ranking desc ''' % (g_serverid)
+    logger.info(sql)
+    #print "sql",sql
+    res = dbutil.select_sql(sql)
+    print "======================="
+    print "get res in iqyatv pri ranking", res
+    print "======================="
+    ids = set()
+    for r in res:
+        ids.add(r[0])
+    if ids:
+        return True
+    return False
+
+def get_iqyall_valid_area(vm_id):
+    sql = '''select area from vm_users where server_id={0} and vm_id={1}
+            and user_type=11 and mobile_no is not null'''.format(g_serverid,
+                    vm_id)
+    res = dbutil.select_sql(sql)
+    if not res:
+       return None
+    areas = []
+    for r in res:
+        areas.append(r[0])
+    # areas_done = get_iqy_atving_area(vm_id,False)
+    # areas_all = list(set(areas).difference(set(areas_done)))
+    area = choice(areas)
+    return area
     
+def get_iqy_valid_area(vm_id):
+    # sql = '''select area from vm_users where server_id={0} and vm_id={1}
+            # and user_type=11 and status=1 and mobile_no is not null'''.format(g_serverid,
+                    # vm_id)
+    sql = '''SELECT
+                    area
+            FROM
+                    vm_users 
+            WHERE
+                    profile_id not IN (
+                    SELECT
+                            cur_profile_id 
+                    FROM
+                            vm_cur_task 
+                    WHERE
+                            server_id = {0} 
+                            AND vm_id = {1} 
+                            AND user_type in(11,13)
+                            and status>3
+                            AND UNIX_TIMESTAMP( NOW( ) ) - UNIX_TIMESTAMP( start_time ) <21600
+                            union 
+                            select 
+                            cur_profile_id 
+                    FROM
+                            vm_cur_task 
+                    WHERE
+                            server_id = {0} 
+                            AND vm_id = {1} 
+                            AND user_type = 12
+                            and status in(-1,1,2) 
+                            )
+	AND server_id = {0} 
+	AND vm_id =  {1}
+	AND user_type = 11 
+	AND STATUS = 1 
+	AND mobile_no IS NOT NULL'''.format(g_serverid, vm_id)
+    print sql
+    res = dbutil.select_sql(sql)
+    if not res:
+       return []
+    areas = []
+    for r in res:
+        areas.append(r[0])
+    print("区域", areas)
+    # areas_done = get_iqy_atving_area(vm_id)
+    # print("iqy atving 区域", areas_done)
+    # areas_all = list(set(areas).difference(set(areas_done)))
+    # area = choice(areas_all)
+    area = choice(areas)
+    return area
+
+
+def get_iqy_atving_area(vm_id, is_vip=True):
+    # sql = '''select area from vm_users where server_id={0} and vm_id={1}
+            # and user_type=11 and status=1 and mobile_no is not null'''.format(g_serverid,
+                    # vm_id)
+    sql = ''' SELECT
+                            cur_profile_id 
+                    FROM
+                            vm_cur_task 
+                    WHERE
+                            server_id = {0} 
+                            AND vm_id = {1} 
+                            AND user_type = 12
+                            and status in(-1,1,2) 
+    '''
+    sql = sql.format(g_serverid, vm_id)
+    print sql
+    res = dbutil.select_sql(sql)
+    areas = []
+    for r in res:
+        areas.append(r[0])
+    return areas
+
+    
+def get_iqyatv_valid_area(vm_id):
+    sql = '''select area from vm_users where server_id={0} and vm_id={1}
+            and user_type=11 and status=0 and mobile_no is not null'''.format(g_serverid,
+                    vm_id)
+    res = dbutil.select_sql(sql)
+    if not res:
+       return None
+    areas = []
+    for r in res:
+        areas.append(r[0])
+    area = choice(areas)
+    return area
+
+def iqyatv_business(vm_id):
+    sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
+    a.vm_id=%d and a.status in(1,-1,2) '''
+    sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
+    sqltmp = sql % (g_serverid, vm_id)
+    res = dbutil.select_sql(sqltmp)
+    print sqltmp
+    print res
+    if not res:
+        print "in iqyatv heer"
+        sqltmp = sql_count % (g_serverid, vm_id)
+        res = dbutil.select_sql(sqltmp)
+        count = 0
+        print res
+        if res:
+            count = res[0][0]
+        logger.warn("running task vm:%d,count:%d", vm_id, count)
+        if count < g_pb:
+            area = get_iqyatv_valid_area(vm_id)
+            print "iqyatv area:",area
+            #area = '58'
+            if not area:
+                return False
+            else:
+                logger.info("当前area:%s", area)
+            try:   
+            #if True:
+                with utils.SimpleFlock("/tmp/area/{0}.lock".format(area), 1):
+                    ret = is_valid_area(area)
+                    if not ret:
+                        logger.info("area:%s 不可用", area)
+                        return
+                    ret,task_id = g_taskallot.allot_by_priority(
+                        vm_id, area, None,12)
+                    print "===== get task ======:", task_id
+                    if not ret or task_id is None:
+                        logger.warn(
+                            utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
+                                分配显示任务'''), vm_id)
+                        return False
+                    return True
+
+
+            except Exception, e:
+                logger.error('exception on area lock', exc_info=True)
+                time.sleep(2)
+                return False
+                
+        else:
+            logger.warn(
+                utils.auto_encoding('''虚拟机:%d
+                    当前运行任务数:%d>=%d'''),
+                vm_id, count, g_pb)
+            return False
+    else:
+        logger.info(
+            utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
+            vm_id)
+        return False
+
+def iqyall_business(vm_id):
+    sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
+    a.vm_id=%d and a.status in(1,-1,2) '''
+    sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
+    sqltmp = sql % (g_serverid, vm_id)
+    res = dbutil.select_sql(sqltmp)
+    print sqltmp
+    print res
+    if not res:
+        print "in iqyall heer"
+        sqltmp = sql_count % (g_serverid, vm_id)
+        res = dbutil.select_sql(sqltmp)
+        count = 0
+        print res
+        if res:
+            count = res[0][0]
+        logger.warn("running task vm:%d,count:%d", vm_id, count)
+        if count < g_pb:
+            area = get_iqyall_valid_area(vm_id)
+            print "area:",area
+            #area = '58'
+            if not area:
+                return False
+            else:
+                logger.info("iqyall 当前area:%s", area)
+            try:   
+            #if True:
+                with utils.SimpleFlock("/tmp/area/{0}.lock".format(area), 1):
+                    ret = is_valid_area(area)
+                    if not ret:
+                        logger.info("iqyall area:%s 不可用", area)
+                        return
+                    ret,task_id = g_taskallot.allot_by_priority(
+                        vm_id, area, None,13)
+                    print "===== get task ======:", task_id
+                    if not ret or task_id is None:
+                        logger.warn(
+                            utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
+                                分配显示任务'''), vm_id)
+                        return False
+                    return True
+
+
+            except Exception, e:
+                logger.error('exception on area lock', exc_info=True)
+                time.sleep(2)
+                return False
+                
+        else:
+            logger.warn(
+                utils.auto_encoding('''虚拟机:%d
+                    当前运行任务数:%d>=%d'''),
+                vm_id, count, g_pb)
+            return False
+    else:
+        logger.info(
+            utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
+            vm_id)
+        return False
+
+def iqy_business(vm_id):
+    #iqyall_business(vm_id)
+    sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
+    a.vm_id=%d and a.status in(1,-1,2) '''
+    sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
+    sqltmp = sql % (g_serverid, vm_id)
+    res = dbutil.select_sql(sqltmp)
+    print sqltmp
+    print res
+    if not res:
+        print "in heer"
+        sqltmp = sql_count % (g_serverid, vm_id)
+        res = dbutil.select_sql(sqltmp)
+        count = 0
+        print res
+        if res:
+            count = res[0][0]
+        logger.warn("running task vm:%d,count:%d", vm_id, count)
+        if count < g_pb:
+            area = get_iqy_valid_area(vm_id)
+            print "area:",area
+            #area = '58'
+            if not area:
+                return False
+            else:
+                logger.info("当前area:%s", area)
+            try:   
+            #if True:
+                with utils.SimpleFlock("/tmp/area/{0}.lock".format(area), 1):
+                    ret = is_valid_area(area)
+                    if not ret:
+                        logger.info("area:%s 不可用", area)
+                        return
+                    ret,task_id = g_taskallot.allot_by_priority(
+                        vm_id, area, None,11)
+                    print "===== get task ======:", task_id
+                    if not ret or task_id is None:
+                        logger.warn(
+                            utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
+                                分配显示任务'''), vm_id)
+                        return False
+                    return True
+
+
+            except Exception, e:
+                logger.error('exception on area lock', exc_info=True)
+                time.sleep(2)
+                return False
+                
+        else:
+            logger.warn(
+                utils.auto_encoding('''虚拟机:%d
+                    当前运行任务数:%d>=%d'''),
+                vm_id, count, g_pb)
+            return False
+    else:
+        logger.info(
+            utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"),
+            vm_id)
+        return False
+
 
 def vm_business(vm_id):
     sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
-    a.user_type!=99 and a.vm_id=%d and a.status in(1,-1,-2) '''
+    a.user_type!=99 and a.vm_id=%d and a.status in(1,-1,2) '''
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
     sqltmp = sql % (g_serverid, vm_id)
     # print sqltmp
@@ -219,25 +610,61 @@ def vm_business(vm_id):
             count = res[0][0]
         # logger.warn("running task vm:%d,count:%d", vm_id, count)
         if count < g_pb:
-            # if not can_take_task():
-                # logger.warn(
-                    # utils.auto_encoding("vm:%d\
-                            # 没有可运行任务名额,只能跑零跑任务"), vm_id)
-            # logger.error(
-                # utils.auto_encoding("==========进入任务分配=========="))
-            print "the pri-id:", g_rcv
-            ret,task_id = g_taskallot.allot_by_priority(
-                vm_id,g_rcv )
-            print "get task:", task_id
-            if not ret:
-                logger.warn(
-                    utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
-                        分配显示任务'''), vm_id)
+            print "normal herre"
+            area= get_valid_area()
+            #area = '94'
+            if area == -1:
+                logger.info("没有可用非0任务的area")
+                area = get_valid_zero_area()
+                if area == -1:
+                    logger.info("没有可用0跑任务的area")
+                else:
+                    with utils.SimpleFlock("/tmp/area/{0}.lock".format(area), 1):
+                        ret = is_valid_zero_area(area)
+                        if not ret:
+                            logger.info("0area:%s 不可跑零跑", area)
+                            return
+                        ret,task_id = g_taskallot.allot_default( vm_id,area)
+                        logger.info("get default task:%d", task_id)
+                        logger.info("当前零跑area:%s", area)
+                return
+            else:
+                logger.info("当前area:%s", area)
                 
-                if not is_task_running(vm_id):
-                    ret,task_id = g_taskallot.allot_rest(
-                        vm_id,g_rcv )
-                    print "get rest task:", task_id
+            try:   
+            #if True:
+                with utils.SimpleFlock("/tmp/area/{0}.lock".format(area), 1):
+                    ret = is_valid_area(area)
+                    if not ret:
+                        logger.info("area:%s 不可用", area)
+                        return
+                    single_gid = is_run_as_single(area)
+                    if single_gid: 
+                        s_gids = single_gid.split(',')
+                        sgid = choice(s_gids)
+                    else:
+                        sgid = 0
+                    print "the single_gid:", sgid
+                    ret,task_id = g_taskallot.allot_by_priority(
+                        vm_id, area, int(sgid))
+                    print "===== get task ======:", task_id
+                    if not ret or task_id is None:
+                        logger.warn(
+                            utils.auto_encoding('''虚拟机:%d 没有non zero任务可运行,
+                                分配显示任务'''), vm_id)
+
+                        ret = is_valid_zero_area(area)
+                        if not ret:
+                            logger.info("0area:%s 不可跑零跑", area)
+                            return
+                        
+                        ret,task_id = g_taskallot.allot_default( vm_id,area)
+                        logger.info("get default task:%d", task_id)
+                        
+                        # print "get default task:", task_id
+            except Exception, e:
+                logger.error('exception on area lock', exc_info=True)
+                time.sleep(2)
                 
         else:
             logger.warn(
@@ -257,26 +684,39 @@ def main_loop():
     # vm_names = ['w1', 'w2']
     while True:
         try:
-            g_rcv = is_run_as_single()
-            print "gcv:", g_rcv
-            if not g_rcv:
-                print "==============================================="
-                for i in range(0, len(vm_ids)):
-                    vm_id = vm_ids[i]
+            #g_rcv = is_run_as_single()
+            #print "gcv:", g_rcv
+            #if not g_rcv:
+            print "==============================================="
+            for i in range(0, len(vm_ids)):
+                vm_id = vm_ids[i]
+                if can_iqyatv_run():
+                    ret = iqyatv_business(vm_id)
+                    if not ret:
+                        print "here0"
+                        if can_iqy_run():
+                            print "here1"
+                            ret = iqy_business(vm_id)
+                            print "here1", ret
+                            if not ret:
+                                vm_business(vm_id)
+                        else:
+                            vm_business(vm_id)
+                elif can_iqy_run():
+                    print "here2"
+                    ret = iqy_business(vm_id)
+                    if not ret:
+                        vm_business(vm_id)
+                else:
+                    print "here3"
                     vm_business(vm_id)
-            else:
-                vm_id = choice(vm_ids)
-                vm_business(vm_id)
+            #else:
+            #    vm_id = choice(vm_ids)
+            #    vm_business(vm_id)
             time.sleep(3)
         except:
             logger.error('exception on main_loop', exc_info=True)
             time.sleep(3)
-
-
-def reset():
-    global g_start_idx, vm_names, vm_ids
-    vms.shutdown_allvm(g_serverid)
-    vm_names, vm_ids = vms.start_vms(g_serverid, 1, 8)
 
 
 def init():
@@ -298,7 +738,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm3",
+        default="vm4",
         help="database name, default is vm")
     parser.add_option(
         "-u",
@@ -328,7 +768,7 @@ def init():
         "-b",
         "--paraell browser",
         dest="pb",
-        default="4",
+        default="1",
         help="paraell running browser  default is 0")
     parser.add_option(
         "-m",
@@ -387,11 +827,6 @@ def init():
     # g_vpn_db = DBUtil(logger,options.db_ip,3306, "vpntest", options.username, options.password,'utf8')
     #启动时的时间跟设置时间不一致,关机开关开启
     cur_hour = get_cur_hour()
-    tlist = get_shutdown_time()
-    global g_last_shutdown_time
-    if str(cur_hour) in tlist:
-        g_last_shutdown_time = cur_hour
-        print "last_shutdown_time", g_last_shutdown_time
     global g_taskallot, g_logtask, g_task_profile, g_pc, g_user, g_userec, g_user7
     # task.taskallot.logger = logger
     task.parallel.logger = logger
@@ -401,15 +836,15 @@ def init():
     g_userrest = UserAllot_Rest(g_serverid, g_pc, dbutil, logger)
     g_user7= UserAllot7(g_serverid, g_pc, dbutil, logger)
     g_user_reg= UserAllot_Reg(g_serverid, g_pc, dbutil, logger)
+    g_user_iqy = UserAllot_IQY(g_serverid, g_pc, dbutil, logger)
+    g_user_iqyall = UserAllot_IQYALL(g_serverid, g_pc, dbutil, logger)
+    g_user_iqyatv = UserAllot_IQYATV(g_serverid, g_pc, dbutil, logger)
     g_taskallot = TaskAllot(g_want_init_task, g_serverid, g_pc, g_user,
-            g_userec, g_user7,g_userrest,g_user_reg, dbutil, logger)
+            g_userec, g_user7,g_userrest,g_user_reg,g_user_iqy,g_user_iqyatv,g_user_iqyall,dbutil, logger)
     # g_taskallot = TaskAllotRolling(g_want_init_task, g_serverid, g_pc, g_user, dbutil,
             # logger)
     g_logtask = LogTask(dbutil, logger)
     # g_task_profile = TaskProfile(g_serverid, dbutil, g_pc, logger)
-    global g_manvm
-    g_manvm = CManVM(g_serverid, logger, options.db_ip, 3306, "vm3",
-                     options.username, options.password)
 
     vms.logger = logger
     vms.dbutil = dbutil
@@ -421,12 +856,6 @@ def init():
     return True
 
 
-def test():
-    # dbutil.autocommit(False)
-    dbutil.select_sql('''select * from vm_priv where id=1 for
-    update''', False)
-    dbutil.execute_sql("update vm_priv set priv=0 where id=1", False)
-    # dbutil.commit()
 
 def main():
     try:

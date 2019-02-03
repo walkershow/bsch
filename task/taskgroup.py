@@ -54,10 +54,11 @@ class TaskGroup(object):
 
     # groupid:0 表示默认任务
     def __initValidTasks(self, task_group_id):
-        if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
-            self.id = task_group_id
-            return self.task_group_dict[task_group_id].pop()
-        else:
+        # if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
+            # self.id = task_group_id
+            # return self.task_group_dict[task_group_id].pop()
+        # else:
+        if True:
             # sql = "select b.id,b.task_id,a.start_time,a.end_time,a.allot_times,a.ran_times from vm_task_allot_impl a,vm_task_group b, vm_task c where b.id=%d \
                     # and b.task_id=a.task_id and b.id =a.id and a.task_id=c.id and c.status=1 \
                     # and time_to_sec(NOW()) between time_to_sec(a.start_time) and time_to_sec(a.end_time) \
@@ -84,12 +85,13 @@ class TaskGroup(object):
             AND a.ran_times < a.allot_times
             AND b.ran_times < b.times
             AND b.id > 0
-            ORDER BY rand()'''.format(task_group_id)
+            ORDER BY b.ranking desc,rand()'''.format(task_group_id)
             print (sql)
             res = self.db.select_sql(sql)
             task = {}
             self.tasks = []
             for row in res:
+                return row[1]
                 # task = {
                     # 'task_id': row[1],
                     # 'start_time': row[2],
@@ -98,13 +100,13 @@ class TaskGroup(object):
                     # 'ran_times': row[5],
                     # 'is_default': False
                 # }
-                if not self.task_group_dict.has_key(task_group_id):
-                    self.task_group_dict[task_group_id]=[row[1]]
-                else:
-                    self.task_group_dict[task_group_id].append(row[1])
-            if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
-                self.id = task_group_id
-                return self.task_group_dict[task_group_id].pop()
+                # if not self.task_group_dict.has_key(task_group_id):
+                    # self.task_group_dict[task_group_id]=[row[1]]
+                # else:
+                    # self.task_group_dict[task_group_id].append(row[1])
+            # if self.task_group_dict.has_key(task_group_id) and self.task_group_dict[task_group_id]:
+                # self.id = task_group_id
+                # return self.task_group_dict[task_group_id].pop()
         return None
 
          
@@ -153,7 +155,7 @@ class TaskGroup(object):
         return True
 
     @staticmethod
-    def getDefaultTask(db, server_id, vm_id, not_baidu = 0):
+    def getDefaultTask2(db, server_id, vm_id, not_baidu = 0):
         sql = "select id,user_type,terminal_type from zero_schedule_list where time_to_sec(NOW()) between time_to_sec(start_time) and time_to_sec(end_time) \
                 and ran_times<run_times and server_id=%d and vm_id=%d"
         if not_baidu == 0:
@@ -214,6 +216,27 @@ class TaskGroup(object):
         return Task(task["task_id"], True, db, task['id'])
 
     @staticmethod
+    def getDefaultTask(db):
+        task = None
+        sql = '''select task_id from vm_task_group a,vm_task b where a.task_id=b.id and
+        b.status=1 and a.id=0 order by rand() limit 1'''
+        res = db.select_sql(sql)
+        if res:
+            task_id = res[0][0]
+            task = {
+                'id': id,
+                'task_id': task_id,
+                'start_time': 0,
+                'end_time': 0,
+                'times': 9999999,
+                'ran_times': 0,
+                'is_default': True
+            }
+        else:
+            return None
+        return Task(task["task_id"], True, db, task['id'])
+
+    @staticmethod
     def getNineTask(db, server_id, vm_id):
         return Task(9999, True, db, None)
 
@@ -239,10 +262,10 @@ class TaskGroup(object):
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)
 
-    def add_impl_ran_times(self, task_id):
+    def add_impl_ran_times(self, gid, task_id):
         sql = '''update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d
         and time_to_sec(NOW()) >= time_to_sec(start_time) and
-        time_to_sec(now())<time_to_sec(end_time)''' % (self.id, task_id)
+        time_to_sec(now())<time_to_sec(end_time)''' % (gid, task_id)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)

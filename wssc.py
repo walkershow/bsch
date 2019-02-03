@@ -35,7 +35,7 @@ wssc_path = None
 def closeprocess(pname):
     try:
         command = "taskkill /F /IM {0}.exe".format(pname)
-        print command
+        # print command
         os.popen(command)
         return True
     except Exception, e:
@@ -86,7 +86,7 @@ def init():
         "-n",
         "--name",
         dest="db_name",
-        default="vm3",
+        default="vm4",
         help="database name, default is gamedb")
     parser.add_option(
         "-u",
@@ -278,6 +278,15 @@ def new_task_come():
     return res[0][0], res[0][1], res[0][2], res[0][3], res[0][4], res[0][
         5], res[0][6], res[0][7], res[0][8]
 
+def set_task_status_request(status, id):
+    sql="insert into task_status_request(task_rid,status,create_time,source) values({0},{1},current_timestamp,'wssc')".format(id,status)
+    res = dbutil.execute_sql(sql)
+
+    if res < 0:
+        print("update failed")
+    else:
+        print(sql)
+
 
 def set_task_status(status, id):
     sql = 'update vm_cur_task set status=%d,update_time=current_timestamp where id=%d' % (
@@ -285,6 +294,7 @@ def set_task_status(status, id):
     ret = dbutil.execute_sql(sql)
     if ret < 0:
         raise Exception, "%s excute error;ret:%d" % (sql, ret)
+    set_task_status_request(status,id)
 
 
 def update_latest_profile_status(task_id, profile_id, status):
@@ -439,7 +449,7 @@ def get_firefox():
             proc.info["cmdline"] = " ".join(proc.info["cmdline"])
             # print proc.info['cmdline']
             if proc.info["cmdline"] is not None and proc.info["cmdline"].find( "firefox.exe --marionette") != -1:
-                print proc.info['cmdline']
+                #print proc.info['cmdline']
                 proc_list.append(proc)
     return proc_list
 
@@ -476,7 +486,7 @@ def removePath(destinationPath):
             pathList = os.listdir(destinationPath)
             for path in pathList:
                 pathFull = os.path.join(destinationPath, path)
-                print pathFull
+                #print pathFull
                 if os.path.isdir(pathFull):
                     if pathFull.find("_MEI") != -1:
                         removePath(pathFull)
@@ -489,7 +499,7 @@ def removePath(destinationPath):
 def clear_on_newday(temp_dir):
     global cur_date
     today = datetime.date.today()
-    print "today:", today, "====", "cur_date:", cur_date
+    # print "today:", today, "====", "cur_date:", cur_date
     if today != cur_date:
         logger.info("==========clear tempdir on new day start==========")
         removePath(temp_dir)
@@ -501,7 +511,7 @@ def clear_by_hours(temp_dir):
     global cur_date,cur_hour
     nowtime = datetime.datetime.now()
     nowhour = nowtime.hour
-    print "nowhour:", nowhour, "====", "cur_hour:", cur_hour
+    # print "nowhour:", nowhour, "====", "cur_hour:", cur_hour
     if nowhour != cur_hour:
         logger.info("==========clear tempdir on new hour start==========")
         removePath(temp_dir)

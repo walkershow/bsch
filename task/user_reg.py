@@ -30,7 +30,7 @@ class UserAllot(object):
 
     def allot_user(self, vm_id, task_group_id, task_id, area):
         day = -1
-        self.logger.info("allot_user rest")
+        self.logger.info("iqyreg allot_user rest")
         if not self.task_profile.set_cur_task_profile(
                 vm_id, task_id, task_group_id, day, area ):
             self.logger.warn(

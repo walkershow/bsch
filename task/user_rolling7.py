@@ -274,6 +274,7 @@ class UserAllot(object):
         self.log_used_day_set = self.used_day_set[:]
         print "used_day_set:", self.used_day_set
         
+        cookie_type = utils.random_pick([0,1],[0.1,0.9])
         while True:
             day = self.get_random_useable_day(task_id, time_seq,
                     uty,last_used_day, server_ids)
@@ -291,7 +292,7 @@ class UserAllot(object):
                 return False
 
             if not self.task_profile.set_cur_task_profile(
-                    vm_id, task_id, task_group_id,  day, area):
+                    vm_id, task_id, task_group_id,  day, area, cookie_type):
                 self.logger.warn(
                     utils.auto_encoding(
                         "task_group_id:%d 距离现在第%d天无可分配使用的用户"),

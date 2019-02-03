@@ -50,9 +50,10 @@ class ZeroTask(object):
 
     def get_inited_profiles(self, vm_id, tty, uty, area):
         sql = "select a.profile_id from vm_users a where a.server_id=%d and a.vm_id=%d "\
-            "and user_type=%d and a.terminal_type = %d and a.area=%d "
+            "and user_type=%d and a.terminal_type = %d and a.area=%s "
         sql = sql % (self.server_id, vm_id, uty, tty, area)
-        # logger.info(sql)
+        print (sql)
+        #logger.info(sql)
         res = self.db.select_sql(sql)
         profile_ids = []
         for r in res:

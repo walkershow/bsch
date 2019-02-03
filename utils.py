@@ -32,7 +32,16 @@ import os
 import fcntl  
 import time
 import errno
-  
+import random
+
+def random_pick(some_list,probabilities):
+    x=random.uniform(0,1)
+    cumulative_probability=0.0
+    for item,item_probability in zip(some_list,probabilities):
+        cumulative_probability+=item_probability
+        if x < cumulative_probability: break
+    return item   
+
 class Lock:   
     def __init__(self, filename):  
         self.filename = filename  
@@ -90,12 +99,17 @@ class SimpleFlock:
             self._fd = None
 
 if __name__ == "__main__":
-    print "Acquiring lock..."
-    with SimpleFlock("locktest", 2):
-        print "Lock acquired."
-        time.sleep(10)
-    print "Lock released."
+    # print "Acquiring lock..."
+    # with SimpleFlock("locktest", 2):
+        # print "Lock acquired."
+        # time.sleep(10)
+    # print "Lock released."
 # print "getmyip"
 # getmyip = GetOutip()
 # localip = getmyip.getip()
 # print localip
+    a=[0,1]
+    b=[0.1,0.9]
+    while True:
+        ret = random_pick(a,b)
+        print ret

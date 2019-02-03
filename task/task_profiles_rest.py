@@ -12,12 +12,12 @@ from logbytask.logtask import LogTask, LogTaskError
 
 class TaskProfile_Rest(TaskProfile):
 
-    def get_rand_profiles(self, vm_id, tty, uty):
+    def get_rand_profiles(self, vm_id, tty, uty ,area):
         print tty, uty
         sql = " select a.profile_id from vm_profiles a,profiles b "\
             "where a.server_id={0} and a.vm_id={1} "\
-            "and b.terminal_type = {3} and a.profile_id=b.id order by rand() limit 1" .format(
-                self.server_id, vm_id, uty, tty)
+            "and b.terminal_type = {3} and area={4} and a.profile_id=b.id order by rand() limit 1" .format(
+                self.server_id, vm_id, uty, tty ,area)
         print sql
         res = self.db.select_sql(sql)
         if not res or len(res)<=0:
@@ -25,7 +25,7 @@ class TaskProfile_Rest(TaskProfile):
         return res[0][0]
 
 
-    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day):
+    def set_cur_task_profile(self, vm_id, task_id, task_group_id, day,area):
         r = self.get_task_type(task_id)
         print r['standby_time'],r['inter_time']
         randtime = 1
@@ -39,12 +39,14 @@ class TaskProfile_Rest(TaskProfile):
 
         sql = '''insert into vm_cur_task(server_id,vm_id,cur_task_id,cur_profile_id,
         task_group_id,status,start_time,oprcode,ran_minutes,user_type,
-        terminal_type,standby_time, timeout, copy_cookie,click_mode,inter_time)
-         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d, %d,%d,%d,%d,%d)''' %(
+        terminal_type,standby_time, timeout,
+        copy_cookie,click_mode,inter_time,area)
+         value(%d,%d,%d,%d,%d,%d,CURRENT_TIMESTAMP,%d,0,%d,%d,
+                 %d,%d,%d,%d,%d,%d)''' %(
             self.server_id, vm_id, task_id, profile_id, task_group_id,
             -1, oprcode,r['user_type'], r['terminal_type'],
             randtime,r['timeout'],
-            r['copy_cookie'], r['click_mode'], r['inter_time'])
+            r['copy_cookie'], r['click_mode'], r['inter_time'], area)
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise Exception, "%s exec failed ret:%d" % (sql, ret)

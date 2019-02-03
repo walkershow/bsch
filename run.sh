@@ -1,21 +1,45 @@
 #!/bin/bash
-nohup python vm-scheduler.py -m 8 -l logconf/vm-scheduler008.log.conf&
-nohup python vm-scheduler.py -m 11 -l logconf/vm-scheduler011.log.conf&
-nohup python vm-scheduler.py -m 12 -l logconf/vm-scheduler012.log.conf&
-nohup python vm-scheduler.py -m 13 -l logconf/vm-scheduler013.log.conf&
-nohup python vm-scheduler.py -m 14 -l logconf/vm-scheduler014.log.conf&
-nohup python vm-scheduler.py -m 15 -l logconf/vm-scheduler015.log.conf&
-nohup python vm-scheduler.py -m 16 -l logconf/vm-scheduler016.log.conf&
-nohup python vm-scheduler.py -m 18 -l logconf/vm-scheduler018.log.conf&
-nohup python vm-scheduler.py -m 34 -l logconf/vm-scheduler034.log.conf&
-nohup python vm-scheduler.py -m 35 -l logconf/vm-scheduler035.log.conf&
-nohup python vm-scheduler.py -m 36 -l logconf/vm-scheduler036.log.conf&
-nohup python vm-scheduler.py -m 17 -l logconf/vm-scheduler017.log.conf&
-nohup python vm-scheduler.py -m 18 -l logconf/vm-scheduler018.log.conf&
-nohup python vm-scheduler.py -m 19 -l logconf/vm-scheduler019.log.conf&
-nohup python vm-scheduler.py -m 20 -l logconf/vm-scheduler020.log.conf&
-nohup python vm-scheduler.py -m 22 -l logconf/vm-scheduler022.log.conf&
-nohup python vm-scheduler.py -m 23 -l logconf/vm-scheduler023.log.conf&
-nohup python vm-scheduler.py -m 24 -l logconf/vm-scheduler024.log.conf&
-nohup python vm-scheduler.py -m 25 -l logconf/vm-scheduler025.log.conf&
-nohup python vm-scheduler.py -m 28 -l logconf/vm-scheduler028.log.conf&
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 1 -l /root/bsch_allproxy/logconf/vm-scheduler001.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 2 -l /root/bsch_allproxy/logconf/vm-scheduler002.log.conf  >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 6 -l /root/bsch_allproxy/logconf/vm-scheduler006.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 3 -l /root/bsch_allproxy/logconf/vm-scheduler003.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 4 -l /root/bsch_allproxy/logconf/vm-scheduler004.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 5 -l /root/bsch_allproxy/logconf/vm-scheduler005.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 7 -l /root/bsch_allproxy/logconf/vm-scheduler007.log.conf  >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 8 -l  /root/bsch/logconf/vm-scheduler008.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 9 -l /root/bsch_allproxy/logconf/vm-scheduler009.log.conf  >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 10 -l /root/bsch_allproxy/logconf/vm-scheduler010.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 11 -l /root/bsch_allproxy/logconf/vm-scheduler011.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 12 -l /root/bsch_allproxy/logconf/vm-scheduler012.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 13 -l /root/bsch_allproxy/logconf/vm-scheduler013.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 14 -l /root/bsch_allproxy/logconf/vm-scheduler014.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 15 -l /root/bsch_allproxy/logconf/vm-scheduler015.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 16 -l /root/bsch_allproxy/logconf/vm-scheduler016.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 17 -l /root/bsch_allproxy/logconf/vm-scheduler017.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 18 -l /root/bsch_allproxy/logconf/vm-scheduler018.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 19 -l /root/bsch_allproxy/logconf/vm-scheduler019.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 20 -l /root/bsch_allproxy/logconf/vm-scheduler020.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 22 -l /root/bsch_allproxy/logconf/vm-scheduler022.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 21 -l /root/bsch_allproxy/logconf/vm-scheduler021.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 23 -l /root/bsch_allproxy/logconf/vm-scheduler023.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 24 -l /root/bsch_allproxy/logconf/vm-scheduler024.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 25 -l /root/bsch_allproxy/logconf/vm-scheduler025.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 26 -l /root/bsch_allproxy/logconf/vm-scheduler026.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 27 -l /root/bsch_allproxy/logconf/vm-scheduler027.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 34 -l /root/bsch/logconf/vm-scheduler034.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 28 -l /root/bsch_allproxy/logconf/vm-scheduler028.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 29 -l /root/bsch_allproxy/logconf/vm-scheduler029.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 34 -l /root/bsch_allproxy/logconf/vm-scheduler034.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 35 -l /root/bsch_allproxy/logconf/vm-scheduler035.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 36 -l /root/bsch_allproxy/logconf/vm-scheduler036.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 37 -l /root/bsch_allproxy/logconf/vm-scheduler037.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 38 -l /root/bsch_allproxy/logconf/vm-scheduler038.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 30 -l /root/bsch_allproxy/logconf/vm-scheduler030.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 32 -l /root/bsch_allproxy/logconf/vm-scheduler032.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 33 -l /root/bsch_allproxy/logconf/vm-scheduler033.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 40 -l /root/bsch_allproxy/logconf/vm-scheduler040.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 41 -l /root/bsch_allproxy/logconf/vm-scheduler041.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 42 -l /root/bsch_allproxy/logconf/vm-scheduler042.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 50 -l /root/bsch_allproxy/logconf/vm-scheduler050.log.conf >/dev/null 2>&1 &
+nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 51 -l /root/bsch_allproxy/logconf/vm-scheduler051.log.conf >/dev/null 2>&1 &
+#nohup /usr/bin/python /root/bsch_allproxy/vm-scheduler.py -m 43 -l /root/bsch_allproxy/logconf/vm-scheduler043.log.conf >/dev/null 2>&1 &

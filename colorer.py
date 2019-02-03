@@ -22,7 +22,7 @@ import os
 import sys
 import tempfile
 import unittest
-# import six
+import six
 
 if (hasattr(sys.stderr, "isatty") and sys.stderr.isatty()) or \
         ('TERM' in os.environ.keys() and os.environ['TERM'] in ['linux']) or \
@@ -180,6 +180,7 @@ class testSingleton(unittest.TestCase):
         for line in open(tmp_file).readlines():
             assert(line == expected_lines[line_no])
             line_no += 1
+
 
 if __name__ == '__main__':
     import logging

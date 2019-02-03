@@ -19,7 +19,7 @@ import datetime
 import logging
 import logging.config
 from task_profiles_ec import TaskProfile_EC
-from user import UserAllot,UserAllotError
+from user import UserAllot
 from parallel import ParallelControl
 sys.path.append("..")
 import dbutil
