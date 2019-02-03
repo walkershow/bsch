@@ -9,9 +9,39 @@
 import os
 import time
 import threading
+import subprocess
+
 logger = None
 g_vManager_path = None
 g_current_dir =  os.getcwd() 
+g_vbox_path = None
+def start_vbox():
+    global g_vbox_path, g_current_dir
+    #cmd = "vboxmanage.exe startvm " + vmName + " -type headless"
+    cmd = "VBox-x64.exe" 
+    logger.info(" cmd:%s", cmd)
+    os.chdir(g_vbox_path)
+    commands = [cmd]
+    process = subprocess.Popen(
+        commands, creationflags=subprocess.CREATE_NEW_CONSOLE)
+    os.chdir(g_current_dir)
+    time.sleep(10)
+
+def kill_vbox():
+    command = "taskkill /F /IM {0}.exe".format("Vbox-x64")
+    print command
+    os.popen(command)
+    command = "taskkill /F /IM {0}.exe".format("VirtualBox")
+    print command
+    os.popen(command)
+    command = "taskkill /F /IM {0}.exe".format("VBoxSVC")
+    print command
+    os.popen(command)
+
+def restart_vbox():
+    kill_vbox()
+    time.sleep(5)
+    start_vbox()
 
 #0:succ 1:failed
 def startVM(vmName):
@@ -195,7 +225,21 @@ def savestateVM(vmName):
     if 0 != status:
         return 1
     return 0
-
+    
+def list_allvms():
+    global g_vManager_path, g_current_dir
+    os.chdir(g_vManager_path)
+    cmd = "vboxmanage list vms"
+    r = os.popen(cmd)
+    res = r.readlines()
+    r.close()
+    os.chdir(g_current_dir)
+    vms = []
+    for l in res:
+        l = l.strip("\r\n")
+        vmname = l.split('"')[1]
+        vms.append(vmname)
+    return vms
 
 def list_allrunningvms():
     global g_vManager_path, g_current_dir
@@ -289,29 +333,29 @@ def set_network_type(vmName, ntype):
     cmd = "vboxmanage modifyvm " + vmName + " --nic1 " + ntype
     j = 0
     while j < 2:
-        if vmName in list_allrunningvms():
-            poweroffVM(vmName)
+        # if vmName in list_allrunningvms():
+        #     # poweroffVM(vmName)
+        #     # logger.info(
+        #     #     "==============%s is running,waiting poweroff============",
+        #     #      vmName)
+        #     # time.sleep(5)
+        # else:
+        logger.info("cmd:%s",  cmd)
+        os.chdir(g_vManager_path)
+        status = os.system(cmd)
+        os.chdir(g_current_dir)
+        logger.info("cmd ret=%d", status)
+        if 0 != status:
             logger.info(
-                "==============%s is running,waiting poweroff============",
-                 vmName)
-            time.sleep(5)
-        else:
-            logger.info("cmd:%s",  cmd)
-            os.chdir(g_vManager_path)
-            status = os.system(cmd)
-            os.chdir(g_current_dir)
-            logger.info("cmd ret=%d", status)
-            if 0 != status:
-                logger.info(
-                    "set network type %s ,cmd %s failed and will sleep 5s to retry",
-                     vmName, cmd)
-                time.sleep(2)
-                j = j + 1
-                continue
+                "set network type %s ,cmd %s failed and will sleep 5s to retry",
+                    vmName, cmd)
+            time.sleep(2)
             j = j + 1
-            logger.info("set network type %s, %s retry %d times * 2s",  vmName, ntype,
-                        j)
-            return 0
+            continue
+        j = j + 1
+        logger.info("set network type %s, %s retry %d times * 2s",  vmName, ntype,
+                    j)
+        return 0
     logger.error(
         "================set network type %s %s failed after %d times * 45s======================",
          vmName, ntype, j)

@@ -21,6 +21,7 @@ class CManVM(object):
         self.logger = logger
         self.db = DBUtil(logger, db_ip, port, db_name, db_user, db_pass,
                          'utf8')
+        vms.dbutil =self.db
         self.exit_flag = False
         self.server_id = server_id
 
@@ -188,6 +189,20 @@ class CManVM(object):
             raise Exception, "update_vm_time exception sql:%s,ret:%d" % (sql,
                                                                          ret)
 
+    def init_start_vm(self):
+        vms.shutdown_allvm(self.server_id)
+        time.sleep(10)
+        sql = "select vm_name from vm_list where server_id=%d and enabled=0 order by id" % (
+            self.server_id)
+        res = self.db.select_sql(sql)
+        if res is None or len(res) < 1:
+            return False
+        for r in res:
+            vm_utils.startVM(r['vm_name'])
+            time.sleep(5)
+        return True
+
+
     #网络异常,关机重置网络
     def reset_network(self):
         # while True:
@@ -241,6 +256,7 @@ class CManVM(object):
 
     def monitoring(self):
         last_status = 1
+        self.init_start_vm()
         while True:
             if self.exit_flag:
                 break
@@ -302,6 +318,10 @@ def get_default_self_logger():
 
 
 if __name__ == "__main__":
-    logger = get_default_self_logger()
-    cmv = CManVM(logger, 1, '192.168.1.21', '3306', 'vm3', 'vm', '123456')
-    cmv.process()
+    logge = get_default_self_logger()
+    if len(sys.argv)<2:
+        print "args not enough"
+        sys.exit(0)
+    server_id = sys.argv[1]
+    cmv = CManVM(logger, server_id, '192.168.1.21', '3306', 'vm3', 'vm', '123456')
+    cmv.init_start_vm()

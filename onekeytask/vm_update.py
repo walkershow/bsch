@@ -1,4 +1,4 @@
-# -*- encoding: utf-8 -*-
+﻿# -*- encoding: utf-8 -*-
 #@Author: coldplay 
 #@Date: 2017-08-15 14:43:18 
 #@Last Modified by:   coldplay 
@@ -40,7 +40,7 @@ def init():
     parser = optparse.OptionParser()
     parser.add_option("-i", "--ip", dest="db_ip", default="192.168.1.21",
             help="mysql database server IP addrss, default is 192.168.1.235" ) 
-    parser.add_option("-n", "--name", dest="db_name", default="vm3",
+    parser.add_option("-n", "--name", dest="db_name", default="vm4",
             help="database name, default is gamedb" ) 
     parser.add_option("-u", "--usrname", dest="username", default="vm",
         help="database login username, default is chinau" )
@@ -222,9 +222,12 @@ def check_wssc_exist():
     process_list = all_process_list()
     found = False
     for proc in process_list:
+        # if proc.info["cmdline"] is not None:
+        #     logger.info("cmdline:%s",proc.info["cmdline"])
         if proc.info["cmdline"] is not None and proc.info["cmdline"].find("wssc") != -1:
             found = True
     if found == False:
+        logger.info("not found wssc")
         real_path = format_cmd(r"Z:\${sid}\w${vid}\script\wssc.bat", "", server_id , vm_id)
         restart_process(real_path)
 
@@ -306,7 +309,7 @@ def main():
             continue
 
         time.sleep(10)
-        print("still running!!!")
+        logger.info("still running!!!")
 
 
 if __name__ == "__main__":
