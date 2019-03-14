@@ -310,7 +310,7 @@ def can_iqyatv_run():
 
 def get_iqyall_valid_area(vm_id):
     sql = '''select area from vm_users where server_id={0} and vm_id={1}
-            and user_type=11 and mobile_no is not null'''.format(g_serverid,
+            and user_type=11 '''.format(g_serverid,
                     vm_id)
     res = dbutil.select_sql(sql)
     if not res:
@@ -358,7 +358,7 @@ def get_iqy_valid_area(vm_id):
 	AND vm_id =  {1}
 	AND user_type = 11 
 	AND STATUS = 1 
-	AND mobile_no IS NOT NULL'''.format(g_serverid, vm_id)
+	AND mobile_no IS NOT NULL '''.format(g_serverid, vm_id)
     print sql
     res = dbutil.select_sql(sql)
     if not res:
@@ -532,7 +532,7 @@ def iqyall_business(vm_id):
         return False
 
 def iqy_business(vm_id):
-    #iqyall_business(vm_id)
+    iqyall_business(vm_id)
     sql = '''select a.vm_id from vm_cur_task a where a.server_id=%d and
     a.vm_id=%d and a.status in(1,-1,2) '''
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
@@ -688,8 +688,10 @@ def main_loop():
             #print "gcv:", g_rcv
             #if not g_rcv:
             print "==============================================="
+            # vm_id = choice(vm_ids)
+            # vm_business(vm_id)
             for i in range(0, len(vm_ids)):
-                vm_id = vm_ids[i]
+                vm_id = i
                 if can_iqyatv_run():
                     ret = iqyatv_business(vm_id)
                     if not ret:
@@ -710,9 +712,9 @@ def main_loop():
                 else:
                     print "here3"
                     vm_business(vm_id)
-            #else:
-            #    vm_id = choice(vm_ids)
-            #    vm_business(vm_id)
+            else:
+               vm_id = choice(vm_ids)
+               vm_business(vm_id)
             time.sleep(3)
         except:
             logger.error('exception on main_loop', exc_info=True)

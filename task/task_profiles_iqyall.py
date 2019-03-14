@@ -24,7 +24,7 @@ class TaskProfile_IQYALL(TaskProfile):
     def get_inited_profiles(self, vm_id, tty, uty, area):
         sql=    "select profile_id from vm_users "\
             "where server_id={0} and vm_id={1} and user_type={2} and " \
-            "terminal_type={3} and mobile_no is not null " \
+            "terminal_type={3} " \
             "and area={4}"\
             .format( self.server_id, vm_id, uty, tty, area)
         print sql

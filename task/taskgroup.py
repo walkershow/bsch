@@ -266,6 +266,7 @@ class TaskGroup(object):
         sql = '''update vm_task_allot_impl set ran_times=ran_times+1 where id=%d and task_id=%d
         and time_to_sec(NOW()) >= time_to_sec(start_time) and
         time_to_sec(now())<time_to_sec(end_time)''' % (gid, task_id)
+        print sql
         ret = self.db.execute_sql(sql)
         if ret < 0:
             raise TaskGroupError, "%s excute error;ret:%d" % (sql, ret)

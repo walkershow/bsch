@@ -392,6 +392,19 @@ class TaskAllot(object):
             return False
         return True
 
+    def is_impl_times_enough(self,gid, tid):
+        sql = '''select 1 from vm_task_allot_impl where 
+        time_to_sec(NOW()) >= time_to_sec(start_time) and
+        time_to_sec(now())<time_to_sec(end_time) and ran_times>=allot_times and
+        id={0} and task_id={1}''' .format(gid, tid)
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        if not res:
+            self.logger.info("task_group_id:%d,tid:%d times is none",gid ,tid)
+            return False
+        return True
+        
+
 
         
 
@@ -428,6 +441,7 @@ class TaskAllot(object):
         self.logger.info("task_group_id:%d,last_succ_time:%s, redial_time:%s",
                          task_group_id, succ_time, redial_time)
         rtime, stime = None, None
+        print redial_time, ip ,atmp
         if redial_time:
             if self.is_group_times_enough(task_group_id,area,redial_time):
                 self.logger.info("task_group_id:%d group enough time", task_group_id)
@@ -707,10 +721,13 @@ class TaskAllot(object):
         try:
             with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
                 allot_single, allot_others = self.can_single_gid_run(area, gid)
+                #force not to allot other task
+                allot_others = False
                 print allot_single, allot_others
                 #改到area了，不要
                 if allot_single:
                     ret, area1 = self.right_to_allot(vm_id, area, gid)
+                    print ret,area1
                     if ret:
                         self.logger.info("get valid gid:%d", gid)
 
@@ -868,7 +885,6 @@ class TaskAllot(object):
                     #        self.logger.info("gid:%d should wait 5 mins",
                     #                         gid)
                     #        continue
-                    print vm_id, area, gid
                     ret, area1 = self.right_to_allot(vm_id, area, gid)
                     if ret:
                         self.logger.info("get valid gid:%d", gid)
@@ -929,14 +945,14 @@ class TaskAllot(object):
                         task,gid = self.get_allot_task(vm_id, False, area)
             # if not task:
                 # task,gid = self.get_allot_task(vm_id,pri_id, True)
-            if task:
-                ret = True
-                print "================="
-                print task.id, gid ,task.rid
-                print "================="
-                self.add_ran_times(task.id, gid, task.rid)
-            else:
-                pass
+           # if task:
+                # ret = True
+                # print "================="
+                # print task.id, gid ,task.rid
+                # print "================="
+                # self.add_ran_times(task.id, gid, task.rid)
+            # else:
+                # pass
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
@@ -992,7 +1008,10 @@ class TaskAllot(object):
                 task_group_id)
         if not task:
             return None
-
+        
+        # if self.is_impl_times_enough(task_group_id,task.id):
+            # self.logger.info("task_id:%d impl enough当前时间已满", task.id)
+            # return None
         if not self.wait_interval(task.id):
             self.logger.warn('task_id: %d 需等待5分钟',task.id)
             return None
@@ -1035,6 +1054,7 @@ class TaskAllot(object):
                 task.id, task_group_id)
             return None
 
+        self.add_ran_times(task.id, task_group_id, task.rid)
         return task
 
     def add_zero_limit_times(self, id):
@@ -1097,7 +1117,7 @@ def getTask():
     from user_rolling7 import UserAllot as UserAllot7
     dbutil.db_host = "192.168.1.21"
     # dbutil.db_host = "3.3.3.6"
-    dbutil.db_name = "vm3"
+    dbutil.db_name = "vm4"
     #dbutil.db_name = "vm-test"
     dbutil.db_user = "dba"
     dbutil.db_port = 3306
@@ -1114,7 +1134,7 @@ def getTask():
     ureg= UserReg(s, pc, dbutil, logger)
     uiqy = UserIQY(s, pc, dbutil, logger)
     user7= UserAllot7(s, pc, dbutil, logger)
-    t = TaskAllot(0, s, pc, user, None,user7,urest,ureg,uiqy ,dbutil, logger)
+    t = TaskAllot(0, s, pc, user, None,user7,urest,ureg,uiqy ,None,None,dbutil, logger)
 
     #t.allot_by_default(1, 1)
     # t.allot_by_default(2, 7)
@@ -1124,7 +1144,7 @@ def getTask():
     while True:
         #areas = range(1,30)
         #area = random.choice(areas)
-        ret = t.allot_by_priority(1, 1, None)
+        ret = t.allot_by_priority(1, 32, None)
         time.sleep(3)
     #单机跑测试
     # while True:
@@ -1152,7 +1172,7 @@ if __name__ == '__main__':
     dbutil.db_host = "192.168.1.21"
     # dbutil.db_host = "3.3.3.6"
     # dbutil.db_name = "vm3"
-    dbutil.db_name = "vm3"
+    dbutil.db_name = "vm4"
     dbutil.db_user = "vm"
     dbutil.db_port = 3306
     dbutil.db_pwd = "123456"
