@@ -187,6 +187,10 @@ class CManVM(object):
 
                     vm_utils.poweroffVM(vmname)
                     time.sleep(8)
+                    vm_utils.set_network_type(vmname, "null")
+                    time.sleep(10)
+                    vm_utils.set_network_type(vmname, "nat")
+                    time.sleep(5)
 
                     ret = vm_utils.startVM(vmname)
                     if ret == 0:
