@@ -716,8 +716,8 @@ def is_vim_active(vm_id):
     sql = """
     select 1
     from vm_list
-    where server_id={}
-      and vm_id={}
+    where server_id={0}
+      and vm_id={1}
       and (UNIX_TIMESTAMP(now())- UNIX_TIMESTAMP(update_time))<60
     ;""".format(
         g_serverid, vm_id
@@ -745,7 +745,7 @@ def main_loop():
             for i in range(0, len(vm_ids)):
                 vm_id = i
                 if not is_vim_active(vm_id):
-                    sleep(3)
+                    time.sleep(3)
                     continue
                 if can_iqyatv_run():
                     ret = iqyatv_business(vm_id)
