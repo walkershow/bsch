@@ -652,7 +652,7 @@ def vm_business(vm_id):
                         ret = is_valid_zero_area(area)
                         if not ret:
                             logger.info("0area:%s 不可跑零跑", area)
-                            return
+                            return False
                         ret, task_id = g_taskallot.allot_default(vm_id, area)
                         logger.info("get default task:%d", task_id)
                         logger.info("当前零跑area:%s", area)
@@ -666,7 +666,7 @@ def vm_business(vm_id):
                     ret = is_valid_area(area)
                     if not ret:
                         logger.info("area:%s 不可用", area)
-                        return
+                        return False
                     single_gid = is_run_as_single(area)
                     if single_gid:
                         s_gids = single_gid.split(",")
@@ -688,15 +688,17 @@ def vm_business(vm_id):
                         ret = is_valid_zero_area(area)
                         if not ret:
                             logger.info("0area:%s 不可跑零跑", area)
-                            return
+                            return False
 
                         ret, task_id = g_taskallot.allot_default(vm_id, area)
                         logger.info("get default task:%d", task_id)
+                        return True
 
                         # print "get default task:", task_id
             except Exception, e:
                 logger.error("exception on area lock", exc_info=True)
                 time.sleep(2)
+                return False
 
         else:
             logger.warn(
@@ -708,8 +710,10 @@ def vm_business(vm_id):
                 count,
                 g_pb,
             )
+            return False
     else:
         logger.info(utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"), vm_id)
+        return False
 
 
 def is_vim_active(vm_id):
@@ -732,6 +736,7 @@ def main_loop():
     # 获取运行状态,请求运行的vm
     global g_rcv
     vm_names, vm_ids = vms.get_vms(g_serverid)
+    print (vm_ids)
     # vm_ids = [1,2]
     # vm_names = ['w1', 'w2']
     while True:
@@ -742,7 +747,48 @@ def main_loop():
             print "==============================================="
             # vm_id = choice(vm_ids)
             # vm_business(vm_id)
-            for i in range(0, len(vm_ids)):
+            for i in vm_ids:
+                vm_id = i
+                if not is_vim_active(vm_id):
+                    time.sleep(3)
+                    continue
+                if can_iqyatv_run():
+                    ret = iqyatv_business(vm_id)
+                    if not ret:
+                        print "here0"
+                        # if not can_iqy_run():
+                        if not vm_business(vm_id):
+                            if can_iqy_run():
+                                iqy_business(vm_id)
+                        else:
+                            iqy_business(vm_id)
+                            # vm_business(vm_id)
+                elif not vm_business(vm_id):
+                    if can_iqy_run():
+                        iqy_business(vm_id)
+            time.sleep(3)
+        except:
+            logger.error("exception on main_loop", exc_info=True)
+            time.sleep(3)
+
+
+# 爱奇艺优先
+def main_loop2():
+    # 获取运行状态,请求运行的vm
+    global g_rcv
+    vm_names, vm_ids = vms.get_vms(g_serverid)
+    print (vm_ids)
+    # vm_ids = [1,2]
+    # vm_names = ['w1', 'w2']
+    while True:
+        try:
+            # g_rcv = is_run_as_single()
+            # print "gcv:", g_rcv
+            # if not g_rcv:
+            print "==============================================="
+            # vm_id = choice(vm_ids)
+            # vm_business(vm_id)
+            for i in vm_ids:
                 vm_id = i
                 if not is_vim_active(vm_id):
                     time.sleep(3)

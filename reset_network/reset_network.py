@@ -128,7 +128,7 @@ class CManVM(object):
         vms = {}
         interval = int(self.get_restart_vm_interval())
         sql = (
-            "select vm_id,vm_name from vm_list where server_id=%d and enabled=0 and status=1 "
+            "select vm_id,vm_name from vm_list where server_id=%d and enabled=0 "
             "and UNIX_TIMESTAMP(current_timestamp)-UNIX_TIMESTAMP(update_time) >%d "
             % (self.server_id, interval)
         )
