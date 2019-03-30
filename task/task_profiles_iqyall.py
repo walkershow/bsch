@@ -77,12 +77,15 @@ class TaskProfile_IQYALL(TaskProfile):
         if user_type == 13:
             user_type = 11
         all_profiles = self.get_inited_profiles(vm_id, terminal_type, user_type, area)
+        # profile 不够用，暂时去掉这个限制
         used_profiles = self.get_used_profiles(
             vm_id, user_type, terminal_type, task_group_id, area
         )
-        using_profiles = self.get_using_profiles(
-            vm_id, user_type, terminal_type, task_group_id, area
-        )
+        used_profiles = []
+        # using_profiles = self.get_using_profiles(
+        # vm_id, user_type, terminal_type, task_group_id, area
+        # )
+        using_profiles = []
         usable_profiles = list(set(all_profiles).difference(set(used_profiles)))
         usable_profiles = list(set(usable_profiles).difference(set(using_profiles)))
         profile_id = None

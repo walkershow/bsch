@@ -569,6 +569,17 @@ class TaskAllot(object):
         else:
             return False
 
+    def is_exclusive_gid(self, gid):
+        sql = """
+                   select 1 from vm_exclusive_gid where task_group_id={0} and exclusive=1
+        ;""".format(
+            gid
+        )
+        res = dbutil.select_sql(sql)
+        if not res or len(res) < 1:
+            return False
+        return True
+
     def get_rankings(self, vm_id):
         sql = "select distinct ranking from vm_task_group where ran_times<times"
         self.logger.info(sql)
@@ -873,8 +884,9 @@ class TaskAllot(object):
         try:
             with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
                 allot_single, allot_others = self.can_single_gid_run(area, gid)
-                # force not to allot other task
-                allot_others = False
+                # 如果是独占任务，不分配其他
+                if self.is_exclusive_gid(gid):
+                    allot_others = False
                 print allot_single, allot_others
                 # 改到area了，不要
                 if allot_single:
