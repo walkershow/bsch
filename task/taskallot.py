@@ -117,25 +117,26 @@ class TaskAllot(object):
             logger.error("set_taskgroup_lastId failed:%d", ret)
 
     def is_inited_start(self, gid):
-        sql = """select max(id) from vm_cur_task where cur_task_id={0} and
+        sql = """select max(id),inter_time from vm_cur_task where cur_task_id={0} and
         inter_time>0 and start_time>current_date""".format(
             gid
         )
         self.logger.info(sql)
         res = dbutil.select_sql(sql)
         if res and len(res) >= 1:
-            return res[0][0]
-        return None
+            return res[0][0], res[0][1]
+        return None, None
 
     def wait_interval(self, gid):
-        max_id = self.is_inited_start(gid)
+        max_id, inter_time = self.is_inited_start(gid)
         print "get max_id:", max_id
         if not max_id:
             return True
         sql = """select 1 from vm_cur_task where id=%d and ( 
-        round((UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(start_time))/60)>5
+        round((UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(start_time))/60)>=%d
         )""" % (
-            max_id
+            max_id,
+            inter_time,
         )
 
         self.logger.info(sql)
@@ -522,6 +523,26 @@ class TaskAllot(object):
             return False
         return True
 
+    def right_to_allot_proxy(self, vm_id, task_group_id):
+        if not self.is_running_times_enough(task_group_id):
+            self.logger.info("task_group_id:%d running enough time", task_group_id)
+            return False
+        return True
+
+    def get_group_dial_type(task_group_id):
+        """deprecated
+        """
+        sql = "select dial_type from vm_task_group_setting where task_group_id={0}".format(
+            task_group_id
+        )
+        self.logger.info(sql)
+        res = dbutil.select_sql(sql)
+        if not res:
+            self.logger.info("task_group_id:%d,dial_type is 0", task_group_id)
+            return 0
+        type = res[0][0]
+        return type
+
     def right_to_allot(self, vm_id, area, task_group_id):
         if area is None:
             return False, None
@@ -556,6 +577,8 @@ class TaskAllot(object):
 
     def is_vpn_dialup_3min(self, area):
         # return False
+        if area is None:
+            return True
         """ 已拨号成功3分钟 """
         sql = (
             "select 1 from vpn_status where area=%s and vpnstatus=1 and UNIX_TIMESTAMP(NOW())-UNIX_TIMESTAMP(update_time)>180"
@@ -692,6 +715,91 @@ class TaskAllot(object):
         self.priority_ids = list(set(ids) - rid_set)
         return self.priority_ids
 
+    def get_proxy_gid_noranking(self):
+        sql = """SELECT
+                        distinct a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.ran_times < b.times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.ranking = 0
+                    and d.user_type >= 20 
+                    and b.priority = 0
+                    AND f.server_id = %d order by ranking desc """ % (
+            self.server_id,
+        )
+        self.logger.info(sql)
+        # print "sql",sql
+        res = self.db.select_sql(sql)
+        print "======================="
+        print "get res in pri ranking", res
+        print "======================="
+        ids = set()
+        for r in res:
+            ids.add(r[0])
+
+        self.priority_ids = list(set(ids))
+        return self.priority_ids
+
+    def get_proxy_gid_ranking(self):
+
+        sql = """SELECT
+                        distinct a.id
+                    FROM
+                        vm_task_group b,
+                        vm_task_allot_impl a,
+                        vm_allot_task_by_servergroup c,
+                        vm_task d,
+                        vm_server_group f
+                    WHERE
+                        b.id = a.id
+                    AND b.task_id = a.task_id
+                    AND d.id = b.task_id
+                    AND d. STATUS = 1
+                    AND f.id = c.server_group_id
+                    and f.status =1
+                    AND c.task_group_id = b.id
+                    AND time_to_sec(NOW()) BETWEEN time_to_sec(a.start_time)
+                    AND time_to_sec(a.end_time)
+                    AND a.ran_times < a.allot_times
+                    AND b.ran_times < b.times
+                    AND b.id > 0
+                    AND c.task_group_id = a.id
+                    and b.ranking > 0
+                    and d.user_type >= 20 
+                    and b.priority = 0
+                    AND f.server_id = %d order by ranking desc """ % (
+            self.server_id,
+        )
+        self.logger.info(sql)
+        # print "sql",sql
+        res = self.db.select_sql(sql)
+        print "======================="
+        print "get res in pri ranking", res
+        print "======================="
+        ids = set()
+        for r in res:
+            ids.add(r[0])
+
+        self.priority_ids = list(set(ids))
+        return self.priority_ids
+
     def get_iqy_gid_nodial(self, is_iqy):
         sql = """SELECT
                         distinct a.id
@@ -760,6 +868,7 @@ class TaskAllot(object):
                     AND c.task_group_id = a.id
                     and b.ranking > 0
                     and d.user_type not in (11,12,13)
+                    and d.user_type < 20
                     and b.priority = 0
                     AND f.server_id = %d order by ranking desc """ % (
             self.server_id
@@ -805,6 +914,7 @@ class TaskAllot(object):
                     AND c.task_group_id = a.id
                     and b.ranking = 0
                     and d.user_type !=11
+                    and d.user_type < 20
                     and b.priority = 0
                     AND f.server_id = %d """ % (
             self.server_id
@@ -929,12 +1039,6 @@ class TaskAllot(object):
                     if gid in rid_set:
                         self.logger.error("gid:%d is banded", gid)
                         continue
-                    # if not self.wait_interval(gid):
-                    #    if not self.can_allot_rest(gid):
-                    #        self.logger.info("gid:%d should wait 5 mins",
-                    #                         gid)
-                    #        continue
-                    # 改到area了，不要
                     ret, area1 = self.right_to_allot(vm_id, area, gid)
                     if ret:
                         self.logger.info("get valid gid:%d", gid)
@@ -947,6 +1051,80 @@ class TaskAllot(object):
                         self.logger.info("get the gid:%d  task:%d", gid, task.id)
                         ret = True
                         # self.add_ran_times(task.id, gid, task.rid)
+                        break
+                    else:
+                        continue
+            except Exception, e:
+                self.logger.error("exception on lock", exc_info=True)
+                self.priority_ids.append(gid)
+                time.sleep(2)
+                continue
+        return task, gid
+
+    def get_proxy_task_noranking(self, vm_id):
+        task, gid = None, None
+        ret = False
+        self.reset_when_newday()
+        if not self.priority_ids:
+            self.get_proxy_gid_noranking()
+
+        while self.priority_ids:
+            band_str = ",".join(str(s) for s in self.priority_ids)
+            ret = False
+            gid = self.priority_ids.pop()
+            self.logger.info(
+                "====================handle proxy gid:%d====================", gid
+            )
+            try:
+                # if True:
+                with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
+                    ret = self.right_to_allot_proxy(vm_id, gid)
+                    if ret:
+                        self.logger.info("get proxy valid gid:%d", gid)
+                    else:
+                        continue
+
+                    task = self.handle_taskgroup(gid, vm_id, None)
+                    if task:
+                        self.logger.info("get the proxy gid:%d  task:%d", gid, task.id)
+                        ret = True
+                        break
+                    else:
+                        continue
+            except Exception, e:
+                self.logger.error("exception on lock", exc_info=True)
+                self.priority_ids.append(gid)
+                time.sleep(2)
+                continue
+        return task, gid
+
+    def get_proxy_task_ranking(self, vm_id):
+        task, gid = None, None
+        ret = False
+        self.reset_when_newday()
+        if not self.priority_ids:
+            self.get_proxy_gid_ranking()
+
+        while self.priority_ids:
+            band_str = ",".join(str(s) for s in self.priority_ids)
+            ret = False
+            gid = self.priority_ids.pop()
+            self.logger.info(
+                "====================handle proxy gid:%d====================", gid
+            )
+            try:
+                # if True:
+                with utils.SimpleFlock("/tmp/{0}.lock".format(gid), 1):
+                    ret = self.right_to_allot_proxy(vm_id, gid)
+                    if ret:
+                        self.logger.info("get proxy valid gid:%d", gid)
+                    else:
+                        continue
+
+                    task = self.handle_taskgroup(gid, vm_id, None)
+                    if task:
+                        self.logger.info("get the proxy gid:%d  task:%d", gid, task.id)
+                        ret = True
                         break
                     else:
                         continue
@@ -1021,24 +1199,16 @@ class TaskAllot(object):
                     if gid in rid_set:
                         self.logger.error("gid:%d is banded", gid)
                         continue
-                    # if not self.wait_interval(gid):
-                    #    if not self.can_allot_rest(gid):
-                    #        self.logger.info("gid:%d should wait 5 mins",
-                    #                         gid)
-                    #        continue
-                    # 改到area了，不要
                     ret, area1 = self.right_to_allot(vm_id, area, gid)
                     if ret:
                         self.logger.info("get valid gid:%d", gid)
                     else:
-                        # self.logger.warn("wait for redial:%d", gid)
                         continue
 
                     task = self.handle_taskgroup(gid, vm_id, area)
                     if task:
                         self.logger.info("get the gid:%d  task:%d", gid, task.id)
                         ret = True
-                        # self.add_ran_times(task.id, gid, task.rid)
                         break
                     else:
                         continue
@@ -1082,11 +1252,6 @@ class TaskAllot(object):
                     if gid in rid_set:
                         self.logger.error("gid:%d is banded", gid)
                         continue
-                    # if not self.wait_interval(gid):
-                    #    if not self.can_allot_rest(gid):
-                    #        self.logger.info("gid:%d should wait 5 mins",
-                    #                         gid)
-                    #        continue
                     ret, area1 = self.right_to_allot(vm_id, area, gid)
                     if ret:
                         self.logger.info("get valid gid:%d", gid)
@@ -1128,6 +1293,21 @@ class TaskAllot(object):
                     task, gid = self.get_ranking_task(vm_id, area)
                     if not task:
                         task, gid = self.get_allot_task(vm_id, False, area)
+        except TaskError, t:
+            raise TaskAllotError, "excute error:%s" % (t.message)
+            ret = False
+        if task:
+            return ret, task.id
+        else:
+            return ret, None
+
+    def allot_by_proxy(self, vm_id):
+        try:
+            ret = True
+            task, gid = None, 0
+            task, gid = self.get_proxy_task_ranking(vm_id)
+            if not task:
+                task, gid = self.get_proxy_task_noranking(vm_id)
         except TaskError, t:
             raise TaskAllotError, "excute error:%s" % (t.message)
             ret = False
@@ -1226,6 +1406,8 @@ class TaskAllot(object):
             self.logger.info("user iqyall")
             area = 0
             ret = self.user_iqyall.allot_user(vm_id, task_group_id, task.id, area)
+        elif uty >= 20:
+            ret = self.user_rand.allot_user(vm_id, task_group_id, task.id, None)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id, area)
         if not ret:
