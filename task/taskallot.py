@@ -594,7 +594,7 @@ class TaskAllot(object):
 
     def is_exclusive_gid(self, gid):
         sql = """
-                   select 1 from vm_exclusive_gid where task_group_id={0} and exclusive=1
+                   select 1 from vm_exclusive_group where task_group_id={0} and exclusive=1
         ;""".format(
             gid
         )
