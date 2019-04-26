@@ -622,7 +622,61 @@ def iqy_business(vm_id):
         return False
 
 
+def proxy_business(vm_id):
+    sql = """select a.vm_id from vm_cur_task a where a.server_id=%d and
+    a.vm_id=%d and a.status in(1,-1,2) """
+    sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"
+    sqltmp = sql % (g_serverid, vm_id)
+    res = dbutil.select_sql(sqltmp)
+    print sqltmp
+    print res
+    if not res:
+        print "proxy here"
+        sqltmp = sql_count % (g_serverid, vm_id)
+        res = dbutil.select_sql(sqltmp)
+        count = 0
+        print res
+        if res:
+            count = res[0][0]
+        logger.warn("running task vm:%d,count:%d", vm_id, count)
+        if count < g_pb:
+            try:
+                ret, task_id = g_taskallot.allot_by_proxy(vm_id)
+                print "===== get task ======:", task_id
+                if not ret or task_id is None:
+                    logger.warn(
+                        utils.auto_encoding(
+                            """虚拟机:%d 没有non zero任务可运行,
+                            分配显示任务"""
+                        ),
+                        vm_id,
+                    )
+                    return False
+                return True
+
+            except Exception, e:
+                logger.error("exception on area lock", exc_info=True)
+                time.sleep(2)
+                return False
+
+        else:
+            logger.warn(
+                utils.auto_encoding(
+                    """虚拟机:%d
+                    当前运行任务数:%d>=%d"""
+                ),
+                vm_id,
+                count,
+                g_pb,
+            )
+            return False
+    else:
+        logger.info(utils.auto_encoding("当前虚拟机:%d,已分配任务或有正在执行的任务"), vm_id)
+        return False
+
+
 def vm_business(vm_id):
+    proxy_business(vm_id)
     sql = """select a.vm_id from vm_cur_task a where a.server_id=%d and
     a.user_type!=99 and a.vm_id=%d and a.status in(1,-1,2) """
     sql_count = "select count(1) from vm_cur_task where server_id=%d and vm_id=%d and status in(1,-1,2)"

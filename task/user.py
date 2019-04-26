@@ -36,13 +36,13 @@ class UserAllot(object):
             if not self.task_profile_noarea.set_cur_task_profile(
                 vm_id, task_id, task_group_id, cookie_type, area
             ):
-                self.logger.warn("task_group_id:%d 无可分配使用的用户", task_group_id, day)
+                self.logger.warn("task_group_id:%d 无可分配使用的用户", task_group_id)
                 return False
         else:
             if not self.task_profile.set_cur_task_profile(
                 vm_id, task_id, task_group_id, cookie_type, area
             ):
-                self.logger.warn("task_group_id:%d 无可分配使用的用户", task_group_id, day)
+                self.logger.warn("task_group_id:%d 无可分配使用的用户", task_group_id)
                 return False
 
         self.logger.info("task_group_id:%d area:%s 成功分配到执行用户", task_group_id, area)
