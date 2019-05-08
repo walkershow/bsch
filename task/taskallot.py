@@ -1407,7 +1407,7 @@ class TaskAllot(object):
             area = 0
             ret = self.user_iqyall.allot_user(vm_id, task_group_id, task.id, area)
         elif uty >= 20:
-            ret = self.user_rand.allot_user(vm_id, task_group_id, task.id, None)
+            ret = self.user.allot_user(vm_id, task_group_id, task.id, None)
         else:
             ret = self.user.allot_user(vm_id, task_group_id, task.id, area)
         if not ret:
